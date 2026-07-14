@@ -1,6 +1,7 @@
 // Single-process HTTP server: OTLP ingestion + query API + dashboard.
 // No framework — node:http is plenty for a local-first tool.
 import http from 'node:http';
+import zlib from 'node:zlib';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -57,9 +58,29 @@ export function createServer({ dbPath, token = null, maxBodyBytes = 32 * 1024 * 
             return;
           }
         }
-        const body = await readBody(req, maxBodyBytes);
+        let body = await readBody(req, maxBodyBytes);
+        // OTLP exporters commonly compress payloads; decode errors from
+        // treating gzip bytes as protobuf look like "index out of range".
+        const encoding = req.headers['content-encoding'] ?? '';
+        if (encoding.includes('gzip')) {
+          body = zlib.gunzipSync(body);
+        } else if (encoding.includes('deflate')) {
+          body = zlib.inflateSync(body);
+        }
         const contentType = req.headers['content-type'] ?? 'application/x-protobuf';
-        const spans = await decodeTraceExport(body, contentType);
+        let spans;
+        try {
+          spans = await decodeTraceExport(body, contentType);
+        } catch (error) {
+          if (process.env.LANGFUSE_RELAY_DEBUG_DIR) {
+            const { writeFileSync } = await import('node:fs');
+            const dump = path.join(process.env.LANGFUSE_RELAY_DEBUG_DIR, `failed-${Date.now()}.bin`);
+            writeFileSync(dump, body);
+            writeFileSync(dump + '.headers.json', JSON.stringify(req.headers, null, 2));
+            logger.error(`[debug] decode failed, payload dumped to ${dump}`);
+          }
+          throw error;
+        }
         for (const span of spans) {
           span.semantics = extractSemantics(span);
         }

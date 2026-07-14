@@ -129,7 +129,11 @@ function extractNemoRelay(attrs) {
     parsed[key] = key.endsWith('_json') ? tryParseJson(value) ?? value : value;
   }
   if (!sawNamespace) return out;
-  out.spanType = 'llm';
+  // Direct attributes observed from real NeMo Relay exports.
+  out.spanType =
+    { llm: 'llm', tool: 'tool', agent: 'agent' }[attrs['nemo_relay.scope_type']] ?? 'llm';
+  if (attrs['nemo_relay.model_name']) out.model = String(attrs['nemo_relay.model_name']);
+  out.costUsd = asNumber(attrs['nemo_relay.llm.cost.total']);
 
   const scan = (node) => {
     if (Array.isArray(node)) {
@@ -147,6 +151,9 @@ function extractNemoRelay(attrs) {
     const found = {};
     if (node.usage && typeof node.usage === 'object') found.usage = node.usage;
     if (Array.isArray(node.messages)) found.messages = node.messages;
+    // NeMo Relay's end.output_json carries the completion as a bare
+    // top-level `content` string rather than a message list.
+    if (typeof node.content === 'string') found.text = node.content;
     if (node.model ?? node.model_id ?? node.modelId) {
       found.model = node.model ?? node.model_id ?? node.modelId;
     }
@@ -169,8 +176,8 @@ function extractNemoRelay(attrs) {
       out.totalTokens ??= asNumber(found.usage.total_tokens);
       out.costUsd ??= asNumber(found.usage.cost_usd);
     }
-    if (found.messages) {
-      const rendered = renderMessages(found.messages);
+    const rendered = found.messages ? renderMessages(found.messages) : found.text ?? null;
+    if (rendered) {
       if (key.includes('output') || key.includes('end') || key.includes('response')) {
         out.outputText ??= rendered;
       } else {

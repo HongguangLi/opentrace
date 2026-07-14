@@ -341,7 +341,24 @@ function renderSpanDetail() {
       (s.output_text ? `<div class="io-block output"><h4>Output</h4><pre>${esc(s.output_text)}</pre></div>` : '') ||
       '<div style="color:var(--muted);font-size:13px">No parsed input/output on this span — check the Attributes tab for raw data.</div>';
   } else if (detailTab === 'attrs') {
-    body = `<div class="io-block"><pre>${esc(JSON.stringify(attrs, null, 2))}</pre></div>`;
+    // Embedded JSON strings (NeMo Relay's *_json payloads etc.) are
+    // unreadable when escaped — parse them so they render as structures.
+    const deepParse = (v) => {
+      if (typeof v === 'string' && /^\s*[{\[]/.test(v)) {
+        try { return JSON.parse(v); } catch { /* keep as string */ }
+      }
+      return v;
+    };
+    body = Object.entries(attrs).map(([k, v]) => {
+      const parsed = deepParse(v);
+      const isObj = typeof parsed === 'object' && parsed !== null;
+      const text = isObj ? JSON.stringify(parsed, null, 2) : String(parsed);
+      const big = text.length > 400;
+      return `<details class="io-block"${big ? '' : ' open'}>
+        <summary style="cursor:pointer;font-size:12px;color:var(--accent);margin-bottom:4px" class="mono">${esc(k)}</summary>
+        <pre>${esc(text)}</pre>
+      </details>`;
+    }).join('') || '<div style="color:var(--muted);font-size:13px">No attributes.</div>';
   } else {
     body = events.length === 0 ? '<div style="color:var(--muted);font-size:13px">No events.</div>'
       : events.map((ev) => `<div class="io-block"><h4>${esc(ev.name)} — ${new Date(nsToMs(ev.timeNs ?? ev.time_ns ?? 0)).toLocaleTimeString()}</h4>

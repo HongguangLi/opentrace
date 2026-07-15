@@ -1,6 +1,6 @@
-# OpenTrace
+# AgentTap
 
-**Agent-native, local-first LLM observability — in a single process.**
+**Tap into your coding agents' LLM traffic — agent-native, local-first observability in a single process.**
 
 A tiny capture-and-visualize platform purpose-built for coding-agent power users — [Claude Code](https://claude.com/claude-code), [Codex](https://github.com/openai/codex), [OpenClaw](https://openclaw.ai), [opencode](https://github.com/sst/opencode), Hermes, [pi](https://github.com/badlogic/pi-mono) — who want to see every LLM call, token count, and tool execution their agents make, without running a fleet of containers. Agent-native means it speaks the OTLP dialects agents actually emit (GenAI, OpenInference, NeMo Relay) out of the box; local-first means everything — capture, storage, dashboard — runs on your machine and your prompts never leave it.
 
@@ -9,10 +9,10 @@ Inspired by two great projects, absorbing what each does best:
 - **[Langfuse](https://github.com/langfuse/langfuse)** — the gold standard for LLM trace *visualization*, but self-hosting requires Postgres + ClickHouse + Redis + MinIO (5 containers).
 - **[NVIDIA NeMo Relay](https://github.com/NVIDIA/NeMo-Relay)** — a brilliant protocol-agnostic *capture* layer for agent runtimes, but it has no UI or storage by design.
 
-OpenTrace combines both roles — NeMo Relay-style capture **and** Langfuse-style storage/visualization — in **one Node.js process with one SQLite file and one dependency**.
+AgentTap combines both roles — NeMo Relay-style capture **and** Langfuse-style storage/visualization — in **one Node.js process with one SQLite file and one dependency**.
 
 ```
-                        ┌──────────────────── OpenTrace ─────────────────────┐
+                        ┌──────────────────── AgentTap ──────────────────────┐
                         │                                                    │
   any coding agent      │   capture interfaces (pick either)                 │
   ────────────────────► │   ┌──────────────────────────────┐                 │
@@ -28,7 +28,7 @@ OpenTrace combines both roles — NeMo Relay-style capture **and** Langfuse-styl
 Agent monitoring here is a single pipeline — capture → normalize → SQLite → dashboard. The only per-agent question is *which capture interface to plug in*, and every agent can use either (or both); they produce identical span records downstream:
 
 - **OTLP ingest** (`:4318/v1/traces`) — for agents/runtimes with a telemetry exporter: NeMo Relay plugins (OpenClaw), Codex's `[otel]` config, Claude Code's OTel env vars, any OpenTelemetry SDK. Captures from *inside* the runtime, so it can carry richer detail (tool spans, agent lifecycle).
-- **LLM tracing proxy** (`:4318/proxy/openai`, `:4318/proxy/anthropic`) — for any agent at all: point its provider base URL at OpenTrace. Requests forward verbatim (your API key passes through untouched, streaming included) and every LLM call is recorded on the side. Zero instrumentation, works even for agents with no telemetry support whatsoever.
+- **LLM tracing proxy** (`:4318/proxy/openai`, `:4318/proxy/anthropic`) — for any agent at all: point its provider base URL at AgentTap. Requests forward verbatim (your API key passes through untouched, streaming included) and every LLM call is recorded on the side. Zero instrumentation, works even for agents with no telemetry support whatsoever.
 
 ```bash
 # proxy interface: one env var, any agent
@@ -36,7 +36,7 @@ export ANTHROPIC_BASE_URL=http://127.0.0.1:4318/proxy/anthropic   # Anthropic-AP
 export OPENAI_BASE_URL=http://127.0.0.1:4318/proxy/openai         # OpenAI-compatible agents
 
 # the openai upstream is configurable — put the proxy in front of LiteLLM, Ollama, NIM, ...
-opentrace --openai-upstream http://127.0.0.1:4000
+agenttap --openai-upstream http://127.0.0.1:4000
 ```
 
 Which interface each agent supports today:
@@ -72,7 +72,7 @@ A zero-build dashboard (one static HTML file, no framework) modeled on Langfuse'
 
 Langfuse is excellent — and if you need team features, evaluations, prompt management, or production scale, use it. The two tools sit at different points:
 
-| | Langfuse (self-hosted) | OpenTrace |
+| | Langfuse (self-hosted) | AgentTap |
 |---|---|---|
 | Positioning | Full LLM engineering platform (tracing, evals, prompt mgmt, teams) | Agent-native local tracing for one developer's machines |
 | Processes | 6 containers | 1 Node process |
@@ -85,7 +85,7 @@ Langfuse is excellent — and if you need team features, evaluations, prompt man
 | Agent `nemo_relay.*` traces | Stored but Input/Output show null (data buried in Metadata) | Input/Output parsed and rendered natively |
 | Data location | Your containers | One local file you can `cp`, `grep`, or delete |
 
-**And from NeMo Relay:** NeMo Relay captures from *inside* the agent runtime (hooks/plugins) and exports — no storage or UI by design. OpenTrace includes its own capture (the network-boundary tracing proxy) *plus* storage and dashboard, so it works standalone with any agent. When a runtime has deep NeMo Relay integration (like OpenClaw), the two compose: NeMo Relay captures richer runtime detail and exports it into OpenTrace's OTLP ingest.
+**And from NeMo Relay:** NeMo Relay captures from *inside* the agent runtime (hooks/plugins) and exports — no storage or UI by design. AgentTap includes its own capture (the network-boundary tracing proxy) *plus* storage and dashboard, so it works standalone with any agent. When a runtime has deep NeMo Relay integration (like OpenClaw), the two compose: NeMo Relay captures richer runtime detail and exports it into AgentTap's OTLP ingest.
 
 ## Install
 
@@ -93,8 +93,8 @@ Requires **Node.js ≥ 22.13** (uses the built-in `node:sqlite` — no database 
 
 ```bash
 # 1. Get the code
-git clone https://github.com/HongguangLi/opentrace
-cd opentrace
+git clone https://github.com/HongguangLi/agenttap
+cd agenttap
 
 # 2. Install the single dependency
 npm install
@@ -106,11 +106,11 @@ npm start
 You should see:
 
 ```
-OpenTrace listening on http://127.0.0.1:4318
+AgentTap listening on http://127.0.0.1:4318
   dashboard     http://127.0.0.1:4318/
   OTLP ingest   http://127.0.0.1:4318/v1/traces
   LLM proxy     http://127.0.0.1:4318/proxy/openai -> https://api.openai.com
-  db            ~/.opentrace/traces.db
+  db            ~/.agenttap/traces.db
 ```
 
 **Verify it works** — send a synthetic agent trace and open the dashboard:
@@ -125,12 +125,12 @@ node examples/send-test-trace.js
 **Run it persistently** (optional) — as a systemd user service:
 
 ```ini
-# ~/.config/systemd/user/opentrace.service
+# ~/.config/systemd/user/agenttap.service
 [Unit]
-Description=OpenTrace local agent observability
+Description=AgentTap local agent observability
 
 [Service]
-ExecStart=/usr/bin/env node /path/to/opentrace/src/cli.js
+ExecStart=/usr/bin/env node /path/to/agenttap/src/cli.js
 Restart=on-failure
 
 [Install]
@@ -138,12 +138,12 @@ WantedBy=default.target
 ```
 
 ```bash
-systemctl --user enable --now opentrace
+systemctl --user enable --now agenttap
 ```
 
 ## What it understands
 
-Every agent speaks a different OTLP dialect. OpenTrace normalizes three semantic conventions into one unified view (model, input/output, token usage, session, user) — spans keep their raw attributes too:
+Every agent speaks a different OTLP dialect. AgentTap normalizes three semantic conventions into one unified view (model, input/output, token usage, session, user) — spans keep their raw attributes too:
 
 | Convention | Namespace | Emitted by |
 |---|---|---|
@@ -155,7 +155,7 @@ Unknown spans still get stored and displayed with heuristic typing (llm / tool /
 
 ### Langfuse-compatible ingest path
 
-OpenTrace also answers on `/api/public/otel/v1/traces` — the same path as Langfuse's OTLP endpoint. If your agent is already configured to export to a Langfuse instance, switching to OpenTrace is a one-line host change. `Authorization` headers are accepted (and ignored unless you set `--token`).
+AgentTap also answers on `/api/public/otel/v1/traces` — the same path as Langfuse's OTLP endpoint. If your agent is already configured to export to a Langfuse instance, switching to AgentTap is a one-line host change. `Authorization` headers are accepted (and ignored unless you set `--token`).
 
 ## Agent integration guides
 
@@ -169,16 +169,16 @@ OpenTrace also answers on `/api/public/otel/v1/traces` — the same path as Lang
 ## CLI
 
 ```
-opentrace [options]
+agenttap [options]
   --port <n>                  Listen port (default 4318, the OTLP/HTTP standard port)
   --host <h>                  Bind address (default 127.0.0.1; use 0.0.0.0 to expose)
-  --db <path>                 SQLite file (default ~/.opentrace/traces.db)
+  --db <path>                 SQLite file (default ~/.agenttap/traces.db)
   --token <t>                 Require this token on ingest and proxy routes
   --openai-upstream <url>     Upstream for /proxy/openai (default https://api.openai.com)
   --anthropic-upstream <url>  Upstream for /proxy/anthropic (default https://api.anthropic.com)
 ```
 
-Environment variables: `OPENTRACE_PORT`, `OPENTRACE_HOST`, `OPENTRACE_DB`, `OPENTRACE_TOKEN`, `OPENTRACE_OPENAI_UPSTREAM`, `OPENTRACE_ANTHROPIC_UPSTREAM`. When `--token` is set, ingest expects it as `Authorization: Bearer/Basic <token>` and proxy routes expect it as an `x-opentrace-token` header (Authorization on proxy routes is reserved for the upstream API key).
+Environment variables: `AGENTTAP_PORT`, `AGENTTAP_HOST`, `AGENTTAP_DB`, `AGENTTAP_TOKEN`, `AGENTTAP_OPENAI_UPSTREAM`, `AGENTTAP_ANTHROPIC_UPSTREAM`. When `--token` is set, ingest expects it as `Authorization: Bearer/Basic <token>` and proxy routes expect it as an `x-agenttap-token` header (Authorization on proxy routes is reserved for the upstream API key).
 
 ## HTTP API
 

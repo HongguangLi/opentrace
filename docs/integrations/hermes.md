@@ -1,4 +1,4 @@
-# Hermes → OpenTrace
+# Hermes → AgentTap
 
 ## LLM tracing proxy (recommended)
 
@@ -11,7 +11,7 @@ base_url: http://127.0.0.1:4318/proxy/openai
 base_url: http://127.0.0.1:4318/proxy/anthropic
 ```
 
-Every completion call is forwarded verbatim (your key passes through) and recorded with model, tokens, and message content. If Hermes talks to a local gateway (LiteLLM, Ollama, NIM), chain it: `opentrace --openai-upstream http://127.0.0.1:4000`.
+Every completion call is forwarded verbatim (your key passes through) and recorded with model, tokens, and message content. If Hermes talks to a local gateway (LiteLLM, Ollama, NIM), chain it: `agenttap --openai-upstream http://127.0.0.1:4000`.
 
 ## OTLP ingest (if your build supports OTel)
 
@@ -21,4 +21,4 @@ export OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
 export OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318
 ```
 
-OpenTrace accepts both `http/protobuf` and `http/json` OTLP.
+AgentTap accepts both `http/protobuf` and `http/json` OTLP.

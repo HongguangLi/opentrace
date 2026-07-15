@@ -1,4 +1,4 @@
-# Claude Code → OpenTrace
+# Claude Code → AgentTap
 
 Both capture interfaces work; pick one.
 

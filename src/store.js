@@ -1,5 +1,5 @@
 // SQLite persistence built on the Node.js built-in `node:sqlite` module —
-// the whole point of OpenTrace is that "install a database" is not a
+// the whole point of AgentTap is that "install a database" is not a
 // prerequisite for tracing your coding agent.
 import { DatabaseSync } from 'node:sqlite';
 import { extractSessionId, extractUserId } from './semantics.js';

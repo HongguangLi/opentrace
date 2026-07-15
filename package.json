@@ -1,11 +1,11 @@
 {
-  "name": "opentrace",
+  "name": "agenttap",
   "version": "0.1.0",
-  "description": "OpenTrace — agent-native, local-first LLM observability: a single-process capture (OTLP ingest + LLM tracing proxy), SQLite store, and dashboard for Claude Code, Codex, OpenClaw, opencode, Hermes, pi and other coding agents. Langfuse-style UX, NeMo Relay-style capture, zero containers.",
+  "description": "AgentTap — agent-native, local-first LLM observability in one process: capture (OTLP ingest + built-in LLM tracing proxy), SQLite store, and a Langfuse-style dashboard for Claude Code, Codex, OpenClaw, opencode, Hermes, pi. Tap into any agent's LLM traffic — zero containers.",
   "license": "Apache-2.0",
   "type": "module",
   "bin": {
-    "opentrace": "src/cli.js"
+    "agenttap": "src/cli.js"
   },
   "main": "src/server.js",
   "engines": {
@@ -16,6 +16,7 @@
     "test": "node --test tests/"
   },
   "keywords": [
+    "agenttap",
     "observability",
     "opentelemetry",
     "otlp",

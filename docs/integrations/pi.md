@@ -1,4 +1,4 @@
-# pi → OpenTrace
+# pi → AgentTap
 
 [pi](https://github.com/badlogic/pi-mono) is a minimal, hackable coding agent.
 

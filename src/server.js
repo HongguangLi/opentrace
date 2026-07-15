@@ -1,4 +1,4 @@
-// OpenTrace — single-process HTTP server: OTLP ingestion + LLM proxy
+// AgentTap — single-process HTTP server: OTLP ingestion + LLM proxy
 // capture + query API + dashboard. No framework — node:http is plenty for
 // a local-first tool.
 import http from 'node:http';
@@ -66,9 +66,9 @@ export function createServer({
         // (it carries the agent's API key), so relay auth uses its own
         // header here — without this check a non-loopback bind would be an
         // open relay to the configured upstreams.
-        const proxyToken = req.headers['x-opentrace-token'] ?? req.headers['x-langfuse-relay-token'];
+        const proxyToken = req.headers['x-agenttap-token'] ?? req.headers['x-opentrace-token'] ?? req.headers['x-langfuse-relay-token'];
         if (token && proxyToken !== token) {
-          sendJson(res, 401, { error: 'unauthorized: set x-opentrace-token header' });
+          sendJson(res, 401, { error: 'unauthorized: set x-agenttap-token header' });
           return;
         }
         const body = await readBody(req, maxBodyBytes);
@@ -105,7 +105,7 @@ export function createServer({
         try {
           spans = await decodeTraceExport(body, contentType);
         } catch (error) {
-          const debugDir = process.env.OPENTRACE_DEBUG_DIR ?? process.env.LANGFUSE_RELAY_DEBUG_DIR;
+          const debugDir = process.env.AGENTTAP_DEBUG_DIR ?? process.env.LANGFUSE_RELAY_DEBUG_DIR;
           if (debugDir) {
             const { writeFileSync } = await import('node:fs');
             const dump = path.join(debugDir, `failed-${Date.now()}.bin`);

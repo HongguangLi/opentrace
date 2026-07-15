@@ -1,4 +1,4 @@
-# Codex → OpenTrace
+# Codex → AgentTap
 
 ## Native OTel export
 

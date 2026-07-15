@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Sends a small synthetic agent trace (agent → LLM call + tool call) to a
-// running opentrace instance using OTLP/JSON. Usage:
+// running agenttap instance using OTLP/JSON. Usage:
 //   node examples/send-test-trace.js [endpoint]
 const endpoint = process.argv[2] ?? 'http://127.0.0.1:4318/v1/traces';
 
@@ -39,7 +39,7 @@ const payload = {
       resource: { attributes: [attr('service.name', 'example-agent')] },
       scopeSpans: [
         {
-          scope: { name: 'opentrace-example' },
+          scope: { name: 'agenttap-example' },
           spans: [
             span(agentSpanId, null, 'agent-turn', now, now + 3_000_000_000n, [
               attr('openinference.span.kind', 'AGENT'),

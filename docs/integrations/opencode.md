@@ -1,4 +1,4 @@
-# opencode → OpenTrace
+# opencode → AgentTap
 
 opencode has no first-party OTLP exporter, so use the built-in LLM tracing proxy — point the provider `baseURL` at the relay in `~/.config/opencode/opencode.json`:
 
@@ -17,7 +17,7 @@ opencode has no first-party OTLP exporter, so use the built-in LLM tracing proxy
 API keys pass through untouched; streaming works transparently. If your model is served by a local gateway (LiteLLM, Ollama, NIM), set the relay's upstream to it:
 
 ```bash
-opentrace --openai-upstream http://127.0.0.1:4000
+agenttap --openai-upstream http://127.0.0.1:4000
 ```
 
 ## Plugin route

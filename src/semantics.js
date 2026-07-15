@@ -212,6 +212,32 @@ export function extractSessionId(attrs) {
   return null;
 }
 
+/**
+ * Extract an end-user identifier from any known convention, so traces can
+ * be grouped by user like Langfuse's Users view. Falls back to OpenClaw's
+ * Feishu open-id (`ou_<hex>:`) embedded at the start of a user message.
+ */
+export function extractUserId(attrs, inputText) {
+  const direct = firstDefined(
+    attrs['user.id'],
+    attrs['gen_ai.user.id'],
+    attrs['langfuse.user.id'],
+    attrs['enduser.id'],
+  );
+  if (direct) return String(direct);
+  for (const [key, value] of Object.entries(attrs)) {
+    if (!key.startsWith('nemo_relay.') || !key.endsWith('_json')) continue;
+    const parsed = tryParseJson(value);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      const found = parsed.userId ?? parsed.user_id ?? parsed.endUserId;
+      if (found) return String(found);
+    }
+  }
+  // OpenClaw prefixes Feishu messages with the sender open-id.
+  const match = /\b(ou_[0-9a-f]{16,})/.exec(inputText ?? '');
+  return match ? match[1] : null;
+}
+
 function guessSpanType(span) {
   const name = span.name.toLowerCase();
   if (/(llm|model|completion|generation|chat)/.test(name)) return 'llm';
@@ -254,5 +280,6 @@ export function extractSemantics(span) {
     merged.totalTokens = merged.promptTokens + merged.completionTokens;
   }
   merged.sessionId = extractSessionId(attrs);
+  merged.userId = extractUserId(attrs, merged.inputText);
   return merged;
 }

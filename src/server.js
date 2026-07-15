@@ -122,6 +122,11 @@ export function createServer({
         return;
       }
 
+      // A time-range window shared by list/stat endpoints; `since` is the
+      // number of ms to look back (0 or absent = all time).
+      const sinceParam = Number(url.searchParams.get('since') ?? 0);
+      const sinceMs = sinceParam > 0 ? Date.now() - sinceParam : null;
+
       if (req.method === 'GET' && url.pathname === '/api/traces') {
         sendJson(res, 200, {
           traces: store.listTraces({
@@ -130,6 +135,21 @@ export function createServer({
             service: url.searchParams.get('service'),
             q: url.searchParams.get('q'),
             session: url.searchParams.get('session'),
+            user: url.searchParams.get('user'),
+            sinceMs,
+          }),
+        });
+        return;
+      }
+
+      if (req.method === 'GET' && url.pathname === '/api/observations') {
+        sendJson(res, 200, {
+          observations: store.listObservations({
+            limit: Math.min(Number(url.searchParams.get('limit') ?? 100), 500),
+            offset: Number(url.searchParams.get('offset') ?? 0),
+            type: url.searchParams.get('type'),
+            q: url.searchParams.get('q'),
+            sinceMs,
           }),
         });
         return;
@@ -138,6 +158,16 @@ export function createServer({
       if (req.method === 'GET' && url.pathname === '/api/sessions') {
         sendJson(res, 200, {
           sessions: store.listSessions({
+            limit: Math.min(Number(url.searchParams.get('limit') ?? 100), 500),
+            offset: Number(url.searchParams.get('offset') ?? 0),
+          }),
+        });
+        return;
+      }
+
+      if (req.method === 'GET' && url.pathname === '/api/users') {
+        sendJson(res, 200, {
+          users: store.listUsers({
             limit: Math.min(Number(url.searchParams.get('limit') ?? 100), 500),
             offset: Number(url.searchParams.get('offset') ?? 0),
           }),
@@ -157,7 +187,7 @@ export function createServer({
       }
 
       if (req.method === 'GET' && url.pathname === '/api/stats') {
-        sendJson(res, 200, store.stats());
+        sendJson(res, 200, store.stats({ sinceMs }));
         return;
       }
 

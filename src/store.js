@@ -2,7 +2,7 @@
 // the whole point of langfuse-relay is that "install a database" is not a
 // prerequisite for tracing your coding agent.
 import { DatabaseSync } from 'node:sqlite';
-import { extractSessionId } from './semantics.js';
+import { extractSessionId, extractUserId } from './semantics.js';
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS spans (
@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS spans (
   status_message TEXT,
   span_type TEXT,
   session_id TEXT,
+  user_id TEXT,
   model TEXT,
   input_text TEXT,
   output_text TEXT,
@@ -46,22 +47,25 @@ export class SpanStore {
     this.#db = new DatabaseSync(dbPath);
     this.#db.exec('PRAGMA journal_mode = WAL;');
     this.#db.exec(SCHEMA);
-    // Migrate databases created before the session_id column existed; the
-    // index must come after so it never references a missing column.
-    try {
-      this.#db.exec('ALTER TABLE spans ADD COLUMN session_id TEXT');
-    } catch {
-      /* column already exists */
+    // Migrate databases created before these columns existed; indexes come
+    // after the ALTERs so they never reference a missing column.
+    for (const col of ['session_id TEXT', 'user_id TEXT']) {
+      try {
+        this.#db.exec(`ALTER TABLE spans ADD COLUMN ${col}`);
+      } catch {
+        /* column already exists */
+      }
     }
     this.#db.exec('CREATE INDEX IF NOT EXISTS idx_spans_session ON spans (session_id)');
+    this.#db.exec('CREATE INDEX IF NOT EXISTS idx_spans_user ON spans (user_id)');
     this.#insert = this.#db.prepare(`
       INSERT INTO spans (
         trace_id, span_id, parent_span_id, name, kind, service, scope,
         start_ns, end_ns, duration_ms, status_code, status_message,
-        span_type, session_id, model, input_text, output_text,
+        span_type, session_id, user_id, model, input_text, output_text,
         prompt_tokens, completion_tokens, total_tokens, cost_usd,
         attributes_json, resource_json, events_json, received_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT (trace_id, span_id) DO UPDATE SET
         end_ns = excluded.end_ns,
         duration_ms = excluded.duration_ms,
@@ -69,25 +73,32 @@ export class SpanStore {
         attributes_json = excluded.attributes_json,
         events_json = excluded.events_json
     `);
-    this.#backfillSessions();
+    this.#backfill();
   }
 
-  // One-time re-extraction of session ids for rows ingested before the
-  // column existed; local trace volumes make this cheap.
-  #backfillSessions() {
+  // One-time re-extraction of session/user ids for rows ingested before the
+  // columns existed; local trace volumes make this cheap.
+  #backfill() {
     const rows = this.#db
-      .prepare('SELECT trace_id, span_id, attributes_json FROM spans WHERE session_id IS NULL')
+      .prepare(
+        'SELECT trace_id, span_id, attributes_json, input_text FROM spans WHERE session_id IS NULL OR user_id IS NULL',
+      )
       .all();
     if (rows.length === 0) return;
     const update = this.#db.prepare(
-      'UPDATE spans SET session_id = ? WHERE trace_id = ? AND span_id = ?',
+      'UPDATE spans SET session_id = ?, user_id = ? WHERE trace_id = ? AND span_id = ?',
     );
     for (const row of rows) {
       try {
-        const sessionId = extractSessionId(JSON.parse(row.attributes_json || '{}'));
-        if (sessionId) update.run(sessionId, row.trace_id, row.span_id);
+        const attrs = JSON.parse(row.attributes_json || '{}');
+        update.run(
+          extractSessionId(attrs),
+          extractUserId(attrs, row.input_text),
+          row.trace_id,
+          row.span_id,
+        );
       } catch {
-        /* unparseable attributes: leave session NULL */
+        /* unparseable attributes: leave NULL */
       }
     }
   }
@@ -112,6 +123,7 @@ export class SpanStore {
           span.statusMessage,
           span.semantics.spanType,
           span.semantics.sessionId ?? null,
+          span.semantics.userId ?? null,
           span.semantics.model,
           span.semantics.inputText,
           span.semantics.outputText,
@@ -133,7 +145,7 @@ export class SpanStore {
     return spans.length;
   }
 
-  listTraces({ limit = 50, offset = 0, service = null, q = null, session = null } = {}) {
+  listTraces({ limit = 50, offset = 0, service = null, q = null, session = null, user = null, sinceMs = null } = {}) {
     const filters = [];
     const params = [];
     if (service) {
@@ -143,6 +155,14 @@ export class SpanStore {
     if (session) {
       filters.push('trace_id IN (SELECT DISTINCT trace_id FROM spans WHERE session_id = ?)');
       params.push(session);
+    }
+    if (user) {
+      filters.push('trace_id IN (SELECT DISTINCT trace_id FROM spans WHERE user_id = ?)');
+      params.push(user);
+    }
+    if (sinceMs) {
+      filters.push('CAST(start_ns AS INTEGER) / 1000000 >= ?');
+      params.push(sinceMs);
     }
     if (q) {
       filters.push('(name LIKE ? OR model LIKE ? OR input_text LIKE ? OR output_text LIKE ?)');
@@ -177,6 +197,62 @@ export class SpanStore {
       .all(...params, limit, offset);
   }
 
+  // Flat list of individual observations (spans), Langfuse's Observations
+  // tab — every LLM/tool call across all traces, newest first.
+  listObservations({ limit = 100, offset = 0, type = null, sinceMs = null, q = null } = {}) {
+    const filters = [];
+    const params = [];
+    if (type) {
+      filters.push('span_type = ?');
+      params.push(type);
+    }
+    if (sinceMs) {
+      filters.push('CAST(start_ns AS INTEGER) / 1000000 >= ?');
+      params.push(sinceMs);
+    }
+    if (q) {
+      filters.push('(name LIKE ? OR model LIKE ? OR input_text LIKE ? OR output_text LIKE ?)');
+      const like = `%${q}%`;
+      params.push(like, like, like, like);
+    }
+    const where = filters.length > 0 ? `WHERE ${filters.join(' AND ')}` : '';
+    return this.#db
+      .prepare(
+        `SELECT trace_id, span_id, name, span_type, kind, service, model,
+                CAST(start_ns AS INTEGER) / 1000000 AS start_ms,
+                duration_ms, status_code,
+                prompt_tokens, completion_tokens, total_tokens, cost_usd,
+                substr(input_text, 1, 200) AS input_preview,
+                substr(output_text, 1, 200) AS output_preview
+         FROM spans ${where}
+         ORDER BY CAST(start_ns AS INTEGER) DESC
+         LIMIT ? OFFSET ?`,
+      )
+      .all(...params, limit, offset);
+  }
+
+  listUsers({ limit = 100, offset = 0 } = {}) {
+    return this.#db
+      .prepare(
+        `SELECT
+           user_id,
+           COUNT(DISTINCT trace_id) AS trace_count,
+           COUNT(DISTINCT session_id) AS session_count,
+           SUM(CASE WHEN span_type = 'llm' THEN 1 ELSE 0 END) AS llm_calls,
+           SUM(COALESCE(total_tokens, 0)) AS total_tokens,
+           SUM(COALESCE(cost_usd, 0)) AS cost_usd,
+           MIN(CAST(start_ns AS INTEGER) / 1000000) AS first_ms,
+           MAX(CAST(end_ns AS INTEGER) / 1000000) AS last_ms,
+           MAX(service) AS service
+         FROM spans
+         WHERE user_id IS NOT NULL
+         GROUP BY user_id
+         ORDER BY last_ms DESC
+         LIMIT ? OFFSET ?`,
+      )
+      .all(limit, offset);
+  }
+
   listSessions({ limit = 100, offset = 0 } = {}) {
     return this.#db
       .prepare(
@@ -205,7 +281,7 @@ export class SpanStore {
       .prepare(
         `SELECT trace_id, span_id, parent_span_id, name, kind, service, scope,
                 start_ns, end_ns, duration_ms, status_code, status_message,
-                span_type, session_id, model, input_text, output_text,
+                span_type, session_id, user_id, model, input_text, output_text,
                 prompt_tokens, completion_tokens, total_tokens, cost_usd,
                 attributes_json, resource_json, events_json
          FROM spans WHERE trace_id = ?
@@ -214,7 +290,9 @@ export class SpanStore {
       .all(traceId);
   }
 
-  stats() {
+  stats({ sinceMs = null } = {}) {
+    const since = sinceMs ? 'CAST(start_ns AS INTEGER) / 1000000 >= ?' : '1=1';
+    const p = sinceMs ? [sinceMs] : [];
     const totals = this.#db
       .prepare(
         `SELECT COUNT(DISTINCT trace_id) AS traces,
@@ -223,25 +301,27 @@ export class SpanStore {
                 SUM(COALESCE(prompt_tokens, 0)) AS prompt_tokens,
                 SUM(COALESCE(completion_tokens, 0)) AS completion_tokens,
                 SUM(COALESCE(cost_usd, 0)) AS cost_usd
-         FROM spans`,
+         FROM spans WHERE ${since}`,
       )
-      .get();
+      .get(...p);
     const services = this.#db
       .prepare(
         `SELECT service, COUNT(DISTINCT trace_id) AS traces, COUNT(*) AS spans
-         FROM spans GROUP BY service ORDER BY spans DESC`,
+         FROM spans WHERE ${since} GROUP BY service ORDER BY spans DESC`,
       )
-      .all();
+      .all(...p);
     const models = this.#db
       .prepare(
         `SELECT model,
                 COUNT(*) AS calls,
                 SUM(COALESCE(prompt_tokens, 0)) AS prompt_tokens,
-                SUM(COALESCE(completion_tokens, 0)) AS completion_tokens
-         FROM spans WHERE span_type = 'llm' AND model IS NOT NULL
+                SUM(COALESCE(completion_tokens, 0)) AS completion_tokens,
+                SUM(COALESCE(cost_usd, 0)) AS cost_usd,
+                AVG(duration_ms) AS avg_ms
+         FROM spans WHERE span_type = 'llm' AND model IS NOT NULL AND ${since}
          GROUP BY model ORDER BY calls DESC`,
       )
-      .all();
+      .all(...p);
     return { totals, services, models };
   }
 

@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>langfuse-relay</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='3' fill='%2358a6ff'/><path d='M4 11 8 5l4 6' stroke='white' stroke-width='1.6' fill='none'/></svg>">
+<title>OpenTrace</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='3' fill='%2358a6ff'/><path d='M3 8h3l2-4 2 8 2-4h3' stroke='white' stroke-width='1.4' fill='none' stroke-linjoin='round'/></svg>">
 <style>
   :root {
     --bg: #0d1117; --panel: #161b22; --panel2: #1c2129; --border: #30363d;
@@ -12,210 +12,240 @@
     --red: #f85149; --amber: #d29922; --purple: #bc8cff;
   }
   * { box-sizing: border-box; margin: 0; }
-  body { background: var(--bg); color: var(--text);
+  body { background: var(--bg); color: var(--text); overflow: hidden;
     font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, sans-serif; }
   code, .mono { font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; }
   button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; }
+  a { color: inherit; }
+  ::-webkit-scrollbar { width: 9px; height: 9px; }
+  ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 5px; }
 
-  header { display: flex; align-items: center; gap: 20px; padding: 10px 20px;
-    border-bottom: 1px solid var(--border); background: var(--panel);
-    position: sticky; top: 0; z-index: 10; }
-  header h1 { font-size: 16px; font-weight: 600; }
-  header h1 span { color: var(--accent); }
-  nav { display: flex; gap: 4px; }
-  nav button { padding: 5px 14px; border-radius: 6px; color: var(--muted); font-size: 13px; }
-  nav button.active { background: var(--panel2); color: var(--text); }
-  #stats { display: flex; gap: 18px; margin-left: auto; color: var(--muted); font-size: 12px; }
+  #app { display: grid; grid-template-columns: 190px 1fr; height: 100vh; }
+
+  /* ---------- sidebar ---------- */
+  aside { background: var(--panel); border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; overflow-y: auto; }
+  .brand { display: flex; align-items: center; gap: 8px; padding: 14px 16px;
+    font-size: 16px; font-weight: 700; border-bottom: 1px solid var(--border); }
+  .brand svg { width: 20px; height: 20px; }
+  .brand span { color: var(--accent); }
+  .brand small { color: var(--muted); font-weight: 400; font-size: 10px; margin-left: auto; }
+  nav { padding: 8px; }
+  .nav-group { font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--muted); padding: 12px 10px 4px; }
+  .nav-item { display: flex; align-items: center; gap: 9px; width: 100%; text-align: left;
+    padding: 7px 10px; border-radius: 6px; color: var(--muted); font-size: 13.5px; }
+  .nav-item:hover { background: var(--panel2); color: var(--text); }
+  .nav-item.active { background: var(--panel2); color: var(--text); font-weight: 600; }
+  .nav-item svg { width: 16px; height: 16px; flex-shrink: 0; }
+  .sidebar-foot { margin-top: auto; padding: 12px 16px; border-top: 1px solid var(--border);
+    font-size: 11px; color: var(--muted); }
+
+  /* ---------- main ---------- */
+  main { display: flex; flex-direction: column; overflow: hidden; }
+  .topbar { display: flex; align-items: center; gap: 14px; padding: 10px 18px;
+    border-bottom: 1px solid var(--border); background: var(--panel); }
+  .topbar h2 { font-size: 15px; font-weight: 600; }
+  .subtabs { display: flex; gap: 3px; margin-left: 8px; }
+  .subtabs button { padding: 4px 12px; border-radius: 6px; color: var(--muted); font-size: 13px; }
+  .subtabs button.active { background: var(--panel2); color: var(--text); }
+  .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+  select.range { background: var(--bg); border: 1px solid var(--border); color: var(--text);
+    border-radius: 6px; padding: 5px 8px; font-size: 12.5px; }
+  #stats { display: flex; gap: 16px; color: var(--muted); font-size: 12px; }
   #stats b { color: var(--text); }
+  .content { flex: 1; overflow: hidden; }
 
-  main { height: calc(100vh - 49px); }
-  #traces-page { display: grid; grid-template-columns: minmax(320px, 420px) 1fr; height: 100%; }
-  #list-pane { border-right: 1px solid var(--border); overflow-y: auto; }
-  #search { width: calc(100% - 24px); margin: 12px; padding: 7px 10px;
-    background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
-    color: var(--text); font-size: 13px; }
-  #search:focus { outline: none; border-color: var(--accent); }
-  .trace-row { padding: 10px 16px; border-bottom: 1px solid var(--border);
-    cursor: pointer; display: flex; flex-direction: column; gap: 3px; }
-  .trace-row:hover { background: var(--panel); }
-  .trace-row.active { background: var(--panel); box-shadow: inset 3px 0 0 var(--accent); }
-  .trace-title { font-weight: 600; font-size: 13px; overflow: hidden;
-    text-overflow: ellipsis; white-space: nowrap; }
-  .trace-meta { display: flex; gap: 10px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
   .badge { display: inline-block; padding: 0 6px; border-radius: 10px; font-size: 11px;
     border: 1px solid var(--border); color: var(--muted); white-space: nowrap; }
   .badge.llm { color: var(--purple); border-color: var(--purple); }
+  .badge.tool { color: var(--amber); border-color: var(--amber); }
+  .badge.agent { color: var(--green); border-color: var(--green); }
   .badge.err { color: var(--red); border-color: var(--red); }
-
-  #detail-pane { overflow-y: auto; padding: 16px 20px; }
-  .placeholder { color: var(--muted); margin-top: 40px; text-align: center; line-height: 2; }
-  #trace-head { border-bottom: 1px solid var(--border); padding-bottom: 12px; margin-bottom: 12px; }
-  #trace-head h2 { font-size: 15px; margin-bottom: 4px; }
-  #trace-head .trace-meta { font-size: 12.5px; }
-  .view-tabs { display: flex; gap: 4px; margin: 10px 0; }
-  .view-tabs button { padding: 4px 12px; border-radius: 6px; font-size: 12.5px;
-    color: var(--muted); border: 1px solid transparent; }
-  .view-tabs button.active { background: var(--panel2); color: var(--text);
-    border-color: var(--border); }
-
-  .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; display: inline-block; }
   .dot.llm { background: var(--purple); } .dot.tool { background: var(--amber); }
   .dot.agent { background: var(--green); } .dot.chain, .dot.other { background: var(--muted); }
   .dot.error { background: var(--red); }
 
-  /* tree view */
-  .span-children { margin-left: 22px; border-left: 1px solid var(--border); padding-left: 6px; }
-  .span-line { display: flex; align-items: center; gap: 8px; padding: 5px 8px;
-    border-radius: 6px; cursor: pointer; font-size: 13px; margin: 2px 0; }
+  /* ---------- tables ---------- */
+  .table-wrap { height: 100%; overflow: auto; }
+  table.grid { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  table.grid th { position: sticky; top: 0; background: var(--panel); text-align: left;
+    padding: 8px 12px; color: var(--muted); font-weight: 500; border-bottom: 1px solid var(--border);
+    white-space: nowrap; z-index: 1; }
+  table.grid td { padding: 7px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  table.grid tr { cursor: pointer; }
+  table.grid tbody tr:hover { background: var(--panel); }
+  table.grid tr.active { background: var(--panel); box-shadow: inset 3px 0 0 var(--accent); }
+  .cell-preview { color: var(--muted); max-width: 320px; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .empty { padding: 40px; text-align: center; color: var(--muted); line-height: 2; }
+
+  /* ---------- traces master-detail ---------- */
+  #traces-split { display: grid; grid-template-columns: minmax(320px, 400px) 1fr; height: 100%; }
+  #trace-list-pane { border-right: 1px solid var(--border); overflow-y: auto; }
+  .search { width: calc(100% - 24px); margin: 10px 12px; padding: 7px 10px; background: var(--bg);
+    border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 13px; }
+  .search:focus { outline: none; border-color: var(--accent); }
+  .trace-row { padding: 9px 14px; border-bottom: 1px solid var(--border); cursor: pointer;
+    display: flex; flex-direction: column; gap: 3px; }
+  .trace-row:hover { background: var(--panel); }
+  .trace-row.active { background: var(--panel); box-shadow: inset 3px 0 0 var(--accent); }
+  .trace-title { font-weight: 600; font-size: 13px; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; }
+  .trace-meta { display: flex; gap: 8px; font-size: 11.5px; color: var(--muted); flex-wrap: wrap; }
+  #trace-detail { overflow-y: auto; padding: 16px 20px; }
+  .detail-placeholder { color: var(--muted); margin-top: 60px; text-align: center; line-height: 2; }
+
+  #trace-head { border-bottom: 1px solid var(--border); padding-bottom: 12px; margin-bottom: 12px; }
+  #trace-head h3 { font-size: 15px; margin-bottom: 4px; }
+  .view-tabs, .dtabs { display: flex; gap: 4px; margin: 10px 0; }
+  .view-tabs button, .dtabs button { padding: 4px 12px; border-radius: 6px; font-size: 12.5px;
+    color: var(--muted); border: 1px solid transparent; }
+  .view-tabs button.active { background: var(--panel2); color: var(--text); border-color: var(--border); }
+  .dtabs button.active { background: var(--panel2); color: var(--text); }
+
+  .span-children { margin-left: 20px; border-left: 1px solid var(--border); padding-left: 6px; }
+  .span-line { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 6px;
+    cursor: pointer; font-size: 13px; margin: 2px 0; }
   .span-line:hover { background: var(--panel); }
   .span-line.selected { background: var(--panel); box-shadow: inset 0 0 0 1px var(--accent); }
   .span-dur { margin-left: auto; color: var(--muted); font-size: 12px; white-space: nowrap; }
   .span-tokens { color: var(--purple); font-size: 12px; white-space: nowrap; }
 
-  /* timeline view */
-  .tl-row { display: grid; grid-template-columns: minmax(200px, 320px) 1fr;
-    align-items: center; gap: 10px; padding: 3px 6px; border-radius: 6px;
-    cursor: pointer; font-size: 12.5px; }
+  .tl-row { display: grid; grid-template-columns: minmax(180px, 300px) 1fr; align-items: center;
+    gap: 10px; padding: 3px 6px; border-radius: 6px; cursor: pointer; font-size: 12.5px; }
   .tl-row:hover { background: var(--panel); }
   .tl-row.selected { background: var(--panel); box-shadow: inset 0 0 0 1px var(--accent); }
-  .tl-name { display: flex; align-items: center; gap: 7px; overflow: hidden;
-    white-space: nowrap; text-overflow: ellipsis; }
-  .tl-track { position: relative; height: 16px; background: var(--panel);
-    border-radius: 4px; overflow: hidden; }
+  .tl-name { display: flex; align-items: center; gap: 7px; overflow: hidden; white-space: nowrap;
+    text-overflow: ellipsis; }
+  .tl-track { position: relative; height: 16px; background: var(--panel); border-radius: 4px; }
   .tl-bar { position: absolute; top: 2px; bottom: 2px; border-radius: 3px; min-width: 2px; }
   .tl-bar.llm { background: var(--purple); } .tl-bar.tool { background: var(--amber); }
   .tl-bar.agent { background: var(--green); } .tl-bar.chain, .tl-bar.other { background: #6e7681; }
   .tl-bar.error { background: var(--red); }
-  .tl-label { position: absolute; font-size: 10.5px; color: var(--muted);
-    top: 0; line-height: 16px; }
+  .tl-label { position: absolute; font-size: 10.5px; color: var(--muted); top: 0; line-height: 16px; }
 
-  /* graph view */
   #graph-wrap { overflow: auto; border: 1px solid var(--border); border-radius: 8px;
     background: var(--bg); max-height: 55vh; }
   .gnode { cursor: pointer; }
-  .gnode rect { fill: var(--panel); stroke: var(--border); stroke-width: 1; rx: 8; }
+  .gnode rect { fill: var(--panel); stroke: var(--border); }
   .gnode.selected rect { stroke: var(--accent); stroke-width: 2; }
-  .gnode.llm rect { stroke: var(--purple); }
-  .gnode.tool rect { stroke: var(--amber); }
-  .gnode.agent rect { stroke: var(--green); }
-  .gnode.error rect { stroke: var(--red); }
+  .gnode.llm rect { stroke: var(--purple); } .gnode.tool rect { stroke: var(--amber); }
+  .gnode.agent rect { stroke: var(--green); } .gnode.error rect { stroke: var(--red); }
   .gnode text { fill: var(--text); font-size: 11.5px; }
   .gnode .sub { fill: var(--muted); font-size: 10px; }
   .gedge { fill: none; stroke: var(--border); stroke-width: 1.4; }
 
-  /* span detail */
   #span-detail { margin-top: 18px; border-top: 1px solid var(--border); padding-top: 14px; }
-  #span-detail h3 { font-size: 14px; margin-bottom: 8px; }
-  .kv { display: grid; grid-template-columns: 150px 1fr; gap: 4px 12px;
-    font-size: 13px; margin-bottom: 12px; }
+  #span-detail h4 { font-size: 14px; margin-bottom: 8px; }
+  .kv { display: grid; grid-template-columns: 150px 1fr; gap: 4px 12px; font-size: 13px; margin-bottom: 12px; }
   .kv dt { color: var(--muted); } .kv dd { word-break: break-all; }
-  .dtabs { display: flex; gap: 4px; margin-bottom: 10px; }
-  .dtabs button { padding: 4px 12px; border-radius: 6px; font-size: 12.5px; color: var(--muted); }
-  .dtabs button.active { background: var(--panel2); color: var(--text); }
   .io-block { margin-bottom: 12px; }
-  .io-block h4 { font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em;
-    color: var(--muted); margin-bottom: 6px; }
-  .io-block pre { background: var(--panel); border: 1px solid var(--border);
-    border-radius: 6px; padding: 10px 12px; white-space: pre-wrap; word-break: break-word;
-    max-height: 300px; overflow-y: auto; font-size: 12.5px; }
+  .io-block h5 { font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-bottom: 6px; }
+  .io-block pre { background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
+    padding: 10px 12px; white-space: pre-wrap; word-break: break-word; max-height: 300px;
+    overflow-y: auto; font-size: 12.5px; }
   .io-block.input pre { border-left: 3px solid var(--accent); }
   .io-block.output pre { border-left: 3px solid var(--green); }
 
-  /* dashboard page */
-  #dash-page { padding: 20px; overflow-y: auto; height: 100%; display: none; }
-  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    gap: 12px; margin-bottom: 20px; }
-  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
-    padding: 14px 16px; }
-  .card .num { font-size: 22px; font-weight: 700; }
-  .card .lbl { font-size: 12px; color: var(--muted); }
-  .chart-box { background: var(--panel); border: 1px solid var(--border);
-    border-radius: 8px; padding: 14px 16px; margin-bottom: 16px; }
+  /* ---------- dashboard ---------- */
+  .page-scroll { height: 100%; overflow-y: auto; padding: 20px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; }
+  .card .cnum { font-size: 22px; font-weight: 700; }
+  .card .clbl { font-size: 12px; color: var(--muted); }
+  .chart-box { background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+    padding: 14px 16px; margin-bottom: 16px; }
   .chart-box h3 { font-size: 13px; margin-bottom: 10px; color: var(--muted); }
-  .hbar-row { display: grid; grid-template-columns: minmax(160px, 320px) 1fr 90px;
-    gap: 10px; align-items: center; font-size: 12.5px; padding: 3px 0; }
+  .hbar-row { display: grid; grid-template-columns: minmax(150px, 300px) 1fr 130px; gap: 10px;
+    align-items: center; font-size: 12.5px; padding: 3px 0; }
   .hbar-track { height: 14px; background: var(--bg); border-radius: 4px; overflow: hidden; }
   .hbar-fill { height: 100%; background: var(--purple); border-radius: 4px; }
   .hbar-val { color: var(--muted); text-align: right; }
 </style>
 </head>
 <body>
-<header>
-  <h1>langfuse<span>-relay</span></h1>
-  <nav>
-    <button id="tab-traces" class="active">Traces</button>
-    <button id="tab-sessions">Sessions</button>
-    <button id="tab-dash">Dashboard</button>
-  </nav>
-  <div id="stats"></div>
-</header>
-<main>
-  <div id="traces-page">
-    <div id="list-pane">
-      <input id="search" type="search" placeholder="Search traces (name, model, content)…">
-      <div id="trace-list"></div>
+<div id="app">
+  <aside>
+    <div class="brand">
+      <svg viewBox="0 0 16 16"><rect width="16" height="16" rx="3" fill="#58a6ff"/><path d="M3 8h3l2-4 2 8 2-4h3" stroke="#fff" stroke-width="1.4" fill="none"/></svg>
+      Open<span>Trace</span>
     </div>
-    <div id="detail-pane">
-      <div class="placeholder">Select a trace to inspect its spans<br>
-        <span style="font-size:12.5px">Views: Tree · Timeline · Graph — click any span for input/output, attributes, and events</span>
+    <nav>
+      <button class="nav-item" data-page="dashboard">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="5" height="5"/><rect x="9" y="2" width="5" height="5"/><rect x="2" y="9" width="5" height="5"/><rect x="9" y="9" width="5" height="5"/></svg>
+        Dashboard</button>
+      <div class="nav-group">Observability</div>
+      <button class="nav-item" data-page="traces">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 4h12M2 8h8M2 12h5"/></svg>
+        Tracing</button>
+      <button class="nav-item" data-page="sessions">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><path d="M8 5v3l2 1.5"/></svg>
+        Sessions</button>
+      <button class="nav-item" data-page="users">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="5" r="2.5"/><path d="M3 13c0-2.5 2.2-4 5-4s5 1.5 5 4"/></svg>
+        Users</button>
+      <div class="nav-group">Analytics</div>
+      <button class="nav-item" data-page="models">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 2l5 3v6l-5 3-5-3V5z"/></svg>
+        Models</button>
+    </nav>
+    <div class="sidebar-foot">
+      Local-first agent observability<br>
+      OTLP ingest + LLM proxy → SQLite
+    </div>
+  </aside>
+
+  <main>
+    <div class="topbar">
+      <h2 id="page-title">Tracing</h2>
+      <div class="subtabs" id="subtabs"></div>
+      <div class="topbar-right">
+        <div id="stats"></div>
+        <select class="range" id="range">
+          <option value="0">All time</option>
+          <option value="3600000">Past 1h</option>
+          <option value="86400000">Past 24h</option>
+          <option value="604800000" selected>Past 7d</option>
+          <option value="2592000000">Past 30d</option>
+        </select>
       </div>
     </div>
-  </div>
-  <div id="sessions-page" style="display:none;padding:20px;overflow-y:auto;height:100%"></div>
-  <div id="dash-page"></div>
-</main>
+    <div class="content" id="content"></div>
+  </main>
+</div>
+
 <script>
-const $ = (sel, el = document) => el.querySelector(sel);
-const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) =>
-  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const fmtDur = (ms) => ms >= 1000 ? (ms / 1000).toFixed(2) + 's' : Math.round(ms) + 'ms';
-const fmtTok = (n) => (n ?? 0) >= 1000 ? ((n) / 1000).toFixed(1) + 'k' : String(n ?? 0);
+const $ = (s, el = document) => el.querySelector(s);
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
+const fmtDur = (ms) => ms == null ? '—' : ms >= 1000 ? (ms/1000).toFixed(2)+'s' : Math.round(ms)+'ms';
+const fmtTok = (n) => (n ?? 0) >= 1000 ? ((n)/1000).toFixed(1)+'k' : String(n ?? 0);
 const nsToMs = (ns) => Number(BigInt(ns) / 1000000n);
+const fmtTime = (ms) => new Date(ms).toLocaleString();
 
-let activeTraceId = null, currentSpans = [], selectedSpanId = null;
-let viewMode = localStorage.getItem('lr-view') || 'timeline';
-let detailTab = 'preview';
+let page = 'traces';
+let range = Number(localStorage.getItem('ot-range') ?? 604800000);
+let sub = 'list'; // traces sub-tab: list | observations
+const q = () => range > 0 ? '&since=' + range : '';
 
-/* ---------- header stats ---------- */
+/* ============ header stats ============ */
 async function loadStats() {
-  const { totals } = await (await fetch('/api/stats')).json();
+  const { totals } = await (await fetch('/api/stats?x=1' + q())).json();
   $('#stats').innerHTML =
     `<span><b>${totals.traces ?? 0}</b> traces</span>` +
-    `<span><b>${totals.spans ?? 0}</b> spans</span>` +
-    `<span><b>${totals.llm_calls ?? 0}</b> LLM calls</span>` +
-    `<span><b>${fmtTok(totals.prompt_tokens)}</b> in / <b>${fmtTok(totals.completion_tokens)}</b> out</span>` +
+    `<span><b>${totals.llm_calls ?? 0}</b> LLM</span>` +
+    `<span><b>${fmtTok(totals.prompt_tokens)}</b>/<b>${fmtTok(totals.completion_tokens)}</b> tok</span>` +
     ((totals.cost_usd ?? 0) > 0 ? `<span><b>$${totals.cost_usd.toFixed(4)}</b></span>` : '');
 }
 
-/* ---------- trace list ---------- */
-let sessionFilter = null;
-async function loadTraces() {
-  const q = $('#search').value.trim();
-  const url = '/api/traces?limit=100' + (q ? '&q=' + encodeURIComponent(q) : '') +
-    (sessionFilter ? '&session=' + encodeURIComponent(sessionFilter) : '');
-  const { traces } = await (await fetch(url)).json();
-  const chip = sessionFilter
-    ? `<div style="padding:0 12px 8px"><span class="badge" style="color:var(--accent);border-color:var(--accent)">
-        session: ${esc(sessionFilter.slice(0, 24))}${sessionFilter.length > 24 ? '…' : ''}
-        <a href="#" id="clear-session" style="color:var(--muted);text-decoration:none;margin-left:6px">✕</a></span></div>`
-    : '';
-  $('#trace-list').innerHTML = chip + traces.map((t) => `
-    <div class="trace-row${t.trace_id === activeTraceId ? ' active' : ''}" data-id="${t.trace_id}">
-      <div class="trace-title">${esc(t.root_name || t.model || t.trace_id.slice(0, 16))}</div>
-      <div class="trace-meta">
-        <span>${new Date(t.start_ms).toLocaleString()}</span>
-        <span>${fmtDur(t.end_ms - t.start_ms)}</span>
-        <span class="badge">${esc(t.service)}</span>
-        <span class="badge llm">${t.llm_calls} LLM · ${fmtTok(t.total_tokens)} tok</span>
-        ${t.error_count > 0 ? `<span class="badge err">${t.error_count} err</span>` : ''}
-      </div>
-    </div>`).join('') ||
-    `<div class="placeholder" style="padding:20px">No traces yet.<br>
-     <span style="font-size:12px">Point an OTLP exporter at <code>/v1/traces</code><br>
-     or a provider base URL at <code>/proxy/openai</code> · <code>/proxy/anthropic</code></span></div>`;
-}
+/* ============ trace detail (shared) ============ */
+let currentSpans = [], selectedSpanId = null, activeTraceId = null;
+let viewMode = localStorage.getItem('ot-view') || 'timeline';
+let detailTab = 'preview', traceSignature = '';
+const typeOf = (s) => s.status_code === 'ERROR' ? 'error' : (s.span_type || 'other');
 
-/* ---------- trace detail ---------- */
 function buildTree(spans) {
   const byId = new Map(spans.map((s) => [s.span_id, { span: s, children: [] }]));
   const roots = [];
@@ -223,324 +253,294 @@ function buildTree(spans) {
     const parent = node.span.parent_span_id && byId.get(node.span.parent_span_id);
     if (parent) parent.children.push(node); else roots.push(node);
   }
-  const sortRec = (nodes) => { nodes.sort((a, b) =>
-    Number(BigInt(a.span.start_ns) - BigInt(b.span.start_ns))); nodes.forEach((n) => sortRec(n.children)); };
+  const sortRec = (ns) => { ns.sort((a,b) => Number(BigInt(a.span.start_ns) - BigInt(b.span.start_ns))); ns.forEach(n => sortRec(n.children)); };
   sortRec(roots);
   return roots;
 }
-const typeOf = (s) => s.status_code === 'ERROR' ? 'error' : (s.span_type || 'other');
-
 function renderTreeView(roots) {
-  const renderNode = (node) => {
+  const rec = (node) => {
     const s = node.span;
-    return `<div>
-      <div class="span-line${s.span_id === selectedSpanId ? ' selected' : ''}" data-span="${s.span_id}">
-        <span class="dot ${typeOf(s)}"></span><span>${esc(s.name)}</span>
-        ${s.model ? `<span class="badge llm">${esc(s.model)}</span>` : ''}
-        ${s.total_tokens ? `<span class="span-tokens">${fmtTok(s.total_tokens)} tok</span>` : ''}
-        <span class="span-dur">${fmtDur(s.duration_ms)}</span>
-      </div>
-      ${node.children.length ? `<div class="span-children">${node.children.map(renderNode).join('')}</div>` : ''}
-    </div>`;
+    return `<div><div class="span-line${s.span_id===selectedSpanId?' selected':''}" data-span="${s.span_id}">
+      <span class="dot ${typeOf(s)}"></span><span>${esc(s.name)}</span>
+      ${s.model?`<span class="badge llm">${esc(String(s.model).split('/').pop())}</span>`:''}
+      ${s.total_tokens?`<span class="span-tokens">${fmtTok(s.total_tokens)} tok</span>`:''}
+      <span class="span-dur">${fmtDur(s.duration_ms)}</span></div>
+      ${node.children.length?`<div class="span-children">${node.children.map(rec).join('')}</div>`:''}</div>`;
   };
-  return roots.map(renderNode).join('');
+  return roots.map(rec).join('');
 }
-
 function renderTimelineView(roots) {
-  const t0 = Math.min(...currentSpans.map((s) => nsToMs(s.start_ns)));
-  const t1 = Math.max(...currentSpans.map((s) => nsToMs(s.end_ns)));
-  const total = Math.max(t1 - t0, 1);
-  const rows = [];
+  const t0 = Math.min(...currentSpans.map(s => nsToMs(s.start_ns)));
+  const t1 = Math.max(...currentSpans.map(s => nsToMs(s.end_ns)));
+  const total = Math.max(t1 - t0, 1), rows = [];
   const walk = (node, depth) => {
-    const s = node.span;
-    const left = (nsToMs(s.start_ns) - t0) / total * 100;
-    const width = Math.max(s.duration_ms / total * 100, 0.5);
-    const labelSide = left + width < 70
-      ? `left:calc(${Math.min(left + width, 96)}% + 5px)` : `right:calc(${100 - left}% + 5px)`;
-    rows.push(`<div class="tl-row${s.span_id === selectedSpanId ? ' selected' : ''}" data-span="${s.span_id}">
-      <div class="tl-name" style="padding-left:${depth * 16}px">
-        <span class="dot ${typeOf(s)}"></span><span>${esc(s.name)}</span>
-      </div>
-      <div class="tl-track">
-        <div class="tl-bar ${typeOf(s)}" style="left:${left}%;width:${width}%"></div>
-        <span class="tl-label" style="${labelSide}">${fmtDur(s.duration_ms)}${s.total_tokens ? ' · ' + fmtTok(s.total_tokens) + ' tok' : ''}</span>
-      </div>
-    </div>`);
-    node.children.forEach((c) => walk(c, depth + 1));
+    const s = node.span, left = (nsToMs(s.start_ns)-t0)/total*100, width = Math.max(s.duration_ms/total*100, 0.5);
+    const side = left+width < 70 ? `left:calc(${Math.min(left+width,96)}% + 5px)` : `right:calc(${100-left}% + 5px)`;
+    rows.push(`<div class="tl-row${s.span_id===selectedSpanId?' selected':''}" data-span="${s.span_id}">
+      <div class="tl-name" style="padding-left:${depth*16}px"><span class="dot ${typeOf(s)}"></span><span>${esc(s.name)}</span></div>
+      <div class="tl-track"><div class="tl-bar ${typeOf(s)}" style="left:${left}%;width:${width}%"></div>
+        <span class="tl-label" style="${side}">${fmtDur(s.duration_ms)}${s.total_tokens?' · '+fmtTok(s.total_tokens)+' tok':''}</span></div></div>`);
+    node.children.forEach(c => walk(c, depth+1));
   };
-  roots.forEach((r) => walk(r, 0));
+  roots.forEach(r => walk(r, 0));
   return `<div style="font-size:11px;color:var(--muted);text-align:right;margin-bottom:4px">total ${fmtDur(total)}</div>` + rows.join('');
 }
-
-/* mind-map style graph: root on the left, execution fans out rightwards */
 function renderGraphView(roots) {
-  const NODE_W = 170, NODE_H = 46, GAP_X = 70, GAP_Y = 14;
-  let leafY = 0;
-  const nodes = [], edges = [];
+  const NW=170, NH=46, GX=70, GY=14; let leafY=0; const nodes=[], edges=[];
   const layout = (node, depth) => {
-    const s = node.span;
-    const x = depth * (NODE_W + GAP_X);
-    let y;
-    if (node.children.length === 0) {
-      y = leafY; leafY += NODE_H + GAP_Y;
-    } else {
-      const childYs = node.children.map((c) => layout(c, depth + 1));
-      y = (Math.min(...childYs) + Math.max(...childYs)) / 2;
-    }
-    nodes.push({ s, x, y });
-    for (const c of node.children) edges.push({ from: { x, y }, toSpan: c.span });
-    return y;
+    const s = node.span, x = depth*(NW+GX); let y;
+    if (!node.children.length) { y = leafY; leafY += NH+GY; }
+    else { const cy = node.children.map(c => layout(c, depth+1)); y = (Math.min(...cy)+Math.max(...cy))/2; }
+    nodes.push({s,x,y}); for (const c of node.children) edges.push({from:{x,y}, to:c.span}); return y;
   };
-  roots.forEach((r) => { layout(r, 0); leafY += GAP_Y; });
-  const pos = new Map(nodes.map((n) => [n.s.span_id, n]));
-  const width = Math.max(...nodes.map((n) => n.x)) + NODE_W + 20;
-  const height = Math.max(...nodes.map((n) => n.y)) + NODE_H + 20;
-  const edgeEls = edges.map((e) => {
-    const to = pos.get(e.toSpan.span_id);
-    const x1 = e.from.x + NODE_W, y1 = e.from.y + NODE_H / 2 + 10;
-    const x2 = to.x, y2 = to.y + NODE_H / 2 + 10;
-    const mx = (x1 + x2) / 2;
-    return `<path class="gedge" d="M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}"/>`;
-  }).join('');
-  const nodeEls = nodes.map(({ s, x, y }) => `
-    <g class="gnode ${typeOf(s)}${s.span_id === selectedSpanId ? ' selected' : ''}" data-span="${s.span_id}"
-       transform="translate(${x},${y + 10})">
-      <rect width="${NODE_W}" height="${NODE_H}" rx="8"/>
-      <circle cx="14" cy="16" r="4" class="dot" fill="${
-        { llm: 'var(--purple)', tool: 'var(--amber)', agent: 'var(--green)', error: 'var(--red)' }[typeOf(s)] ?? 'var(--muted)'}"/>
-      <text x="26" y="20">${esc(s.name.length > 17 ? s.name.slice(0, 16) + '…' : s.name)}</text>
-      <text x="26" y="36" class="sub">${fmtDur(s.duration_ms)}${s.total_tokens ? ' · ' + fmtTok(s.total_tokens) + ' tok' : ''}${s.model ? ' · ' + esc(String(s.model).split('/').pop().slice(0, 14)) : ''}</text>
-    </g>`).join('');
-  return `<div id="graph-wrap"><svg width="${width}" height="${height + 20}" xmlns="http://www.w3.org/2000/svg">${edgeEls}${nodeEls}</svg></div>`;
+  roots.forEach(r => { layout(r,0); leafY += GY; });
+  const pos = new Map(nodes.map(n => [n.s.span_id, n]));
+  const width = Math.max(...nodes.map(n=>n.x))+NW+20, height = Math.max(...nodes.map(n=>n.y))+NH+20;
+  const eEls = edges.map(e => { const to=pos.get(e.to.span_id); const x1=e.from.x+NW,y1=e.from.y+NH/2+10,x2=to.x,y2=to.y+NH/2+10,mx=(x1+x2)/2;
+    return `<path class="gedge" d="M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}"/>`; }).join('');
+  const nEls = nodes.map(({s,x,y}) => `<g class="gnode ${typeOf(s)}${s.span_id===selectedSpanId?' selected':''}" data-span="${s.span_id}" transform="translate(${x},${y+10})">
+    <rect width="${NW}" height="${NH}" rx="8"/>
+    <circle cx="14" cy="16" r="4" fill="${({llm:'var(--purple)',tool:'var(--amber)',agent:'var(--green)',error:'var(--red)'}[typeOf(s)])??'var(--muted)'}"/>
+    <text x="26" y="20">${esc(s.name.length>17?s.name.slice(0,16)+'…':s.name)}</text>
+    <text x="26" y="36" class="sub">${fmtDur(s.duration_ms)}${s.total_tokens?' · '+fmtTok(s.total_tokens)+' tok':''}</text></g>`).join('');
+  return `<div id="graph-wrap"><svg width="${width}" height="${height+20}" xmlns="http://www.w3.org/2000/svg">${eEls}${nEls}</svg></div>`;
 }
-
 function renderTraceView() {
   const roots = buildTree(currentSpans);
-  const el = $('#trace-view');
-  el.innerHTML = viewMode === 'tree' ? renderTreeView(roots)
-    : viewMode === 'graph' ? renderGraphView(roots)
-    : renderTimelineView(roots);
-  document.querySelectorAll('.view-tabs button').forEach((b) =>
-    b.classList.toggle('active', b.dataset.view === viewMode));
+  $('#trace-view').innerHTML = viewMode==='tree'?renderTreeView(roots):viewMode==='graph'?renderGraphView(roots):renderTimelineView(roots);
+  document.querySelectorAll('.view-tabs button').forEach(b => b.classList.toggle('active', b.dataset.view===viewMode));
 }
-
 function renderSpanDetail() {
-  const s = currentSpans.find((x) => x.span_id === selectedSpanId);
-  const el = $('#span-detail');
-  if (!s) { el.innerHTML = ''; return; }
-  const attrs = JSON.parse(s.attributes_json || '{}');
-  const events = JSON.parse(s.events_json || '[]');
+  const s = currentSpans.find(x => x.span_id === selectedSpanId);
+  const el = $('#span-detail'); if (!s) { el.innerHTML=''; return; }
+  const attrs = JSON.parse(s.attributes_json || '{}'), events = JSON.parse(s.events_json || '[]');
   const tabs = `<div class="dtabs">
-    <button data-dtab="preview" class="${detailTab === 'preview' ? 'active' : ''}">Preview</button>
-    <button data-dtab="attrs" class="${detailTab === 'attrs' ? 'active' : ''}">Attributes (${Object.keys(attrs).length})</button>
-    <button data-dtab="events" class="${detailTab === 'events' ? 'active' : ''}">Events (${events.length})</button>
-  </div>`;
+    <button data-dtab="preview" class="${detailTab==='preview'?'active':''}">Preview</button>
+    <button data-dtab="attrs" class="${detailTab==='attrs'?'active':''}">Attributes (${Object.keys(attrs).length})</button>
+    <button data-dtab="events" class="${detailTab==='events'?'active':''}">Events (${events.length})</button></div>`;
   let body = '';
   if (detailTab === 'preview') {
-    body = (s.input_text ? `<div class="io-block input"><h4>Input</h4><pre>${esc(s.input_text)}</pre></div>` : '') +
-      (s.output_text ? `<div class="io-block output"><h4>Output</h4><pre>${esc(s.output_text)}</pre></div>` : '') ||
-      '<div style="color:var(--muted);font-size:13px">No parsed input/output on this span — check the Attributes tab for raw data.</div>';
+    body = (s.input_text?`<div class="io-block input"><h5>Input</h5><pre>${esc(s.input_text)}</pre></div>`:'') +
+      (s.output_text?`<div class="io-block output"><h5>Output</h5><pre>${esc(s.output_text)}</pre></div>`:'') ||
+      '<div style="color:var(--muted);font-size:13px">No parsed input/output — see Attributes.</div>';
   } else if (detailTab === 'attrs') {
-    // Embedded JSON strings (NeMo Relay's *_json payloads etc.) are
-    // unreadable when escaped — parse them so they render as structures.
-    const deepParse = (v) => {
-      if (typeof v === 'string' && /^\s*[{\[]/.test(v)) {
-        try { return JSON.parse(v); } catch { /* keep as string */ }
-      }
-      return v;
-    };
-    body = Object.entries(attrs).map(([k, v]) => {
-      const parsed = deepParse(v);
-      const isObj = typeof parsed === 'object' && parsed !== null;
-      const text = isObj ? JSON.stringify(parsed, null, 2) : String(parsed);
-      const big = text.length > 400;
-      return `<details class="io-block"${big ? '' : ' open'}>
-        <summary style="cursor:pointer;font-size:12px;color:var(--accent);margin-bottom:4px" class="mono">${esc(k)}</summary>
-        <pre>${esc(text)}</pre>
-      </details>`;
-    }).join('') || '<div style="color:var(--muted);font-size:13px">No attributes.</div>';
+    const dp = (v) => { if (typeof v==='string' && /^\s*[{\[]/.test(v)) { try { return JSON.parse(v); } catch {} } return v; };
+    body = Object.entries(attrs).map(([k,v]) => { const p=dp(v), isO=typeof p==='object'&&p!==null;
+      const t = isO?JSON.stringify(p,null,2):String(p), big=t.length>400;
+      return `<details class="io-block"${big?'':' open'}><summary style="cursor:pointer;font-size:12px;color:var(--accent)" class="mono">${esc(k)}</summary><pre>${esc(t)}</pre></details>`;
+    }).join('') || '<div style="color:var(--muted)">No attributes.</div>';
   } else {
-    body = events.length === 0 ? '<div style="color:var(--muted);font-size:13px">No events.</div>'
-      : events.map((ev) => `<div class="io-block"><h4>${esc(ev.name)} — ${new Date(nsToMs(ev.timeNs ?? ev.time_ns ?? 0)).toLocaleTimeString()}</h4>
-          <pre>${esc(JSON.stringify(ev.attributes ?? {}, null, 2))}</pre></div>`).join('');
+    body = events.length ? events.map(ev => `<div class="io-block"><h5>${esc(ev.name)}</h5><pre>${esc(JSON.stringify(ev.attributes??{},null,2))}</pre></div>`).join('')
+      : '<div style="color:var(--muted);font-size:13px">No events.</div>';
   }
-  el.innerHTML = `
-    <h3>${esc(s.name)}</h3>
-    <dl class="kv">
-      <dt>Span / Parent</dt><dd class="mono">${s.span_id}${s.parent_span_id ? ' ← ' + s.parent_span_id : ''}</dd>
-      <dt>Type / Kind</dt><dd>${esc(s.span_type)} / ${esc(s.kind)}${s.scope ? ' · ' + esc(s.scope) : ''}</dd>
-      ${s.model ? `<dt>Model</dt><dd>${esc(s.model)}</dd>` : ''}
-      <dt>Start · Duration</dt><dd>${new Date(nsToMs(s.start_ns)).toLocaleString()} · ${fmtDur(s.duration_ms)}</dd>
-      <dt>Status</dt><dd>${esc(s.status_code)}${s.status_message ? ' — ' + esc(s.status_message) : ''}</dd>
-      ${s.total_tokens ? `<dt>Tokens</dt><dd>${s.prompt_tokens ?? '?'} in + ${s.completion_tokens ?? '?'} out = ${s.total_tokens}</dd>` : ''}
-      ${s.cost_usd ? `<dt>Cost</dt><dd>$${s.cost_usd}</dd>` : ''}
-    </dl>
-    ${tabs}${body}`;
+  el.innerHTML = `<h4>${esc(s.name)}</h4><dl class="kv">
+    <dt>Span / Parent</dt><dd class="mono">${s.span_id}${s.parent_span_id?' ← '+s.parent_span_id:''}</dd>
+    <dt>Type / Kind</dt><dd>${esc(s.span_type)} / ${esc(s.kind)}${s.scope?' · '+esc(s.scope):''}</dd>
+    ${s.model?`<dt>Model</dt><dd>${esc(s.model)}</dd>`:''}
+    ${s.user_id?`<dt>User</dt><dd class="mono">${esc(s.user_id)}</dd>`:''}
+    ${s.session_id?`<dt>Session</dt><dd class="mono">${esc(s.session_id)}</dd>`:''}
+    <dt>Start · Duration</dt><dd>${fmtTime(nsToMs(s.start_ns))} · ${fmtDur(s.duration_ms)}</dd>
+    <dt>Status</dt><dd>${esc(s.status_code)}${s.status_message?' — '+esc(s.status_message):''}</dd>
+    ${s.total_tokens?`<dt>Tokens</dt><dd>${s.prompt_tokens??'?'} in + ${s.completion_tokens??'?'} out = ${s.total_tokens}</dd>`:''}
+    ${s.cost_usd?`<dt>Cost</dt><dd>$${s.cost_usd}</dd>`:''}</dl>${tabs}${body}`;
 }
-
-let traceSignature = '';
-async function openTrace(traceId, keepSelection = false) {
+async function openTrace(traceId, keep = false) {
   activeTraceId = traceId;
-  document.querySelectorAll('.trace-row').forEach((el) =>
-    el.classList.toggle('active', el.dataset.id === traceId));
+  document.querySelectorAll('.trace-row').forEach(el => el.classList.toggle('active', el.dataset.id===traceId));
   const { spans } = await (await fetch('/api/traces/' + traceId)).json();
-  // Auto-refresh must not destroy reading state (expanded details,
-  // scroll) — skip the re-render entirely when nothing changed.
-  const signature = traceId + ':' + spans.map((s) => s.span_id + s.end_ns).join(',');
-  if (keepSelection && signature === traceSignature) return;
-  traceSignature = signature;
-  currentSpans = spans;
-  if (!keepSelection || !spans.some((s) => s.span_id === selectedSpanId)) {
-    selectedSpanId = (spans.find((s) => s.span_type === 'llm') ?? spans[0])?.span_id ?? null;
-  }
-  const t0 = Math.min(...spans.map((s) => nsToMs(s.start_ns)));
-  const t1 = Math.max(...spans.map((s) => nsToMs(s.end_ns)));
-  const tok = spans.reduce((a, s) => a + (s.total_tokens ?? 0), 0);
-  const cost = spans.reduce((a, s) => a + (s.cost_usd ?? 0), 0);
-  const llm = spans.filter((s) => s.span_type === 'llm').length;
-  $('#detail-pane').innerHTML = `
-    <div id="trace-head">
-      <h2>${esc(spans.find((s) => !s.parent_span_id)?.name ?? traceId.slice(0, 16))}</h2>
-      <div class="trace-meta">
-        <span class="mono">${traceId}</span>
-        <span>${new Date(t0).toLocaleString()}</span><span>${fmtDur(t1 - t0)}</span>
-        <span>${spans.length} spans</span><span>${llm} LLM</span>
-        <span>${fmtTok(tok)} tok</span>${cost > 0 ? `<span>$${cost.toFixed(4)}</span>` : ''}
-        <span class="badge">${esc(spans[0]?.service ?? '')}</span>
-      </div>
-    </div>
-    <div class="view-tabs">
-      <button data-view="timeline">Timeline</button>
-      <button data-view="tree">Tree</button>
-      <button data-view="graph">Graph</button>
-    </div>
-    <div id="trace-view"></div>
-    <div id="span-detail"></div>`;
-  renderTraceView();
-  renderSpanDetail();
+  const sig = traceId + ':' + spans.map(s => s.span_id + s.end_ns).join(',');
+  if (keep && sig === traceSignature) return;
+  traceSignature = sig; currentSpans = spans;
+  if (!keep || !spans.some(s => s.span_id===selectedSpanId))
+    selectedSpanId = (spans.find(s => s.span_type==='llm') ?? spans[0])?.span_id ?? null;
+  const t0 = Math.min(...spans.map(s=>nsToMs(s.start_ns))), t1 = Math.max(...spans.map(s=>nsToMs(s.end_ns)));
+  const tok = spans.reduce((a,s)=>a+(s.total_tokens??0),0), cost = spans.reduce((a,s)=>a+(s.cost_usd??0),0);
+  const llm = spans.filter(s=>s.span_type==='llm').length;
+  $('#trace-detail').innerHTML = `<div id="trace-head"><h3>${esc(spans.find(s=>!s.parent_span_id)?.name ?? traceId.slice(0,16))}</h3>
+    <div class="trace-meta"><span class="mono">${traceId.slice(0,24)}</span><span>${fmtTime(t0)}</span>
+      <span>${fmtDur(t1-t0)}</span><span>${spans.length} spans</span><span>${llm} LLM</span><span>${fmtTok(tok)} tok</span>
+      ${cost>0?`<span>$${cost.toFixed(4)}</span>`:''}<span class="badge">${esc(spans[0]?.service??'')}</span>
+      ${spans[0]?.user_id?`<span class="badge">user ${esc(String(spans[0].user_id).slice(0,14))}</span>`:''}</div></div>
+    <div class="view-tabs"><button data-view="timeline">Timeline</button><button data-view="tree">Tree</button><button data-view="graph">Graph</button></div>
+    <div id="trace-view"></div><div id="span-detail"></div>`;
+  renderTraceView(); renderSpanDetail();
 }
 
-/* ---------- sessions page ---------- */
-async function loadSessions() {
-  const { sessions } = await (await fetch('/api/sessions')).json();
-  $('#sessions-page').innerHTML = `
-    <div class="chart-box"><h3>Sessions (${sessions.length})</h3>
-    ${sessions.map((s) => `
-      <div class="trace-row" data-session="${esc(s.session_id)}" style="border-radius:6px">
-        <div class="trace-title mono">${esc(s.session_id)}</div>
-        <div class="trace-meta">
-          <span>${new Date(s.first_ms).toLocaleString()} → ${new Date(s.last_ms).toLocaleTimeString()}</span>
-          <span class="badge">${esc(s.service)}</span>
-          <span class="badge">${s.trace_count} traces · ${s.span_count} spans</span>
-          <span class="badge llm">${s.llm_calls} LLM · ${fmtTok(s.total_tokens)} tok</span>
-          ${s.cost_usd > 0 ? `<span class="badge">$${s.cost_usd.toFixed(4)}</span>` : ''}
-          ${s.error_count > 0 ? `<span class="badge err">${s.error_count} err</span>` : ''}
-        </div>
-      </div>`).join('') ||
-      `<div style="color:var(--muted);font-size:13px;line-height:1.8">No sessions yet.<br>
-       Sessions group traces by conversation: NeMo Relay exports include one automatically;
-       standard <code>session.id</code> / <code>gen_ai.conversation.id</code> attributes work too;
-       proxy callers can send an <code>x-session-id</code> header.</div>`}
-    </div>`;
+/* ============ pages ============ */
+async function renderTraces() {
+  sub = 'list';
+  $('#content').innerHTML = `<div id="traces-split">
+    <div id="trace-list-pane"><input class="search" id="tsearch" placeholder="Search name, model, content…"><div id="trace-list"></div></div>
+    <div id="trace-detail"><div class="detail-placeholder">Select a trace to inspect<br><span style="font-size:12px">Timeline · Tree · Graph views · Preview / Attributes / Events</span></div></div></div>`;
+  $('#tsearch').addEventListener('input', () => { clearTimeout(window._st); window._st = setTimeout(loadTraceList, 250); });
+  await loadTraceList();
 }
-$('#sessions-page').addEventListener('click', (e) => {
-  const row = e.target.closest('[data-session]');
-  if (!row) return;
-  sessionFilter = row.dataset.session;
-  activeTraceId = null;
-  switchPage('traces');
-  loadTraces();
-});
+let sessionFilter = null, userFilter = null;
+async function loadTraceList() {
+  const term = ($('#tsearch')?.value ?? '').trim();
+  const url = '/api/traces?limit=200' + q() + (term?'&q='+encodeURIComponent(term):'') +
+    (sessionFilter?'&session='+encodeURIComponent(sessionFilter):'') + (userFilter?'&user='+encodeURIComponent(userFilter):'');
+  const { traces } = await (await fetch(url)).json();
+  const chip = (sessionFilter||userFilter)
+    ? `<div style="padding:8px 12px"><span class="badge" style="color:var(--accent);border-color:var(--accent)">
+       ${sessionFilter?'session':'user'}: ${esc((sessionFilter||userFilter).slice(0,22))}
+       <a href="#" id="clear-filter" style="color:var(--muted);margin-left:6px;text-decoration:none">✕</a></span></div>` : '';
+  $('#trace-list').innerHTML = chip + (traces.map(t => `<div class="trace-row${t.trace_id===activeTraceId?' active':''}" data-id="${t.trace_id}">
+    <div class="trace-title">${esc(t.root_name || t.model || t.trace_id.slice(0,16))}</div>
+    <div class="trace-meta"><span>${fmtTime(t.start_ms)}</span><span>${fmtDur(t.end_ms-t.start_ms)}</span>
+      <span class="badge">${esc(t.service)}</span><span class="badge llm">${t.llm_calls} LLM · ${fmtTok(t.total_tokens)} tok</span>
+      ${t.error_count>0?`<span class="badge err">${t.error_count} err</span>`:''}</div></div>`).join('') ||
+    `<div class="empty">No traces in range.<br><span style="font-size:12px">Point an OTLP exporter at <code>/v1/traces</code> or a base URL at <code>/proxy/*</code></span></div>`);
+}
 
-/* ---------- dashboard page ---------- */
-async function loadDashboard() {
-  const [{ totals, services, models }, { traces }] = await Promise.all([
-    (await fetch('/api/stats')).json(),
-    (await fetch('/api/traces?limit=500')).json(),
+async function renderObservations() {
+  sub = 'observations';
+  $('#content').innerHTML = `<div class="table-wrap"><table class="grid" id="obs-table">
+    <thead><tr><th>Time</th><th>Name</th><th>Type</th><th>Model</th><th>Input</th><th>Output</th>
+      <th class="num">Latency</th><th class="num">In</th><th class="num">Out</th><th class="num">Cost</th></tr></thead>
+    <tbody id="obs-body"></tbody></table></div>`;
+  await loadObservations();
+}
+async function loadObservations() {
+  const { observations } = await (await fetch('/api/observations?limit=300' + q())).json();
+  $('#obs-body').innerHTML = observations.map(o => `<tr data-trace="${o.trace_id}">
+    <td style="white-space:nowrap">${new Date(o.start_ms).toLocaleTimeString()}</td>
+    <td><span class="dot ${o.status_code==='ERROR'?'error':(o.span_type||'other')}"></span> ${esc(o.name)}</td>
+    <td>${esc(o.span_type)}</td><td>${esc(o.model?String(o.model).split('/').pop():'—')}</td>
+    <td class="cell-preview">${esc(o.input_preview||'')}</td><td class="cell-preview">${esc(o.output_preview||'')}</td>
+    <td class="num">${fmtDur(o.duration_ms)}</td><td class="num">${o.prompt_tokens??'—'}</td>
+    <td class="num">${o.completion_tokens??'—'}</td><td class="num">${o.cost_usd?'$'+o.cost_usd.toFixed(4):'—'}</td></tr>`).join('')
+    || `<tr><td colspan="10" class="empty">No observations in range.</td></tr>`;
+}
+
+async function renderSessions() {
+  $('#content').innerHTML = `<div class="table-wrap"><table class="grid">
+    <thead><tr><th>Session</th><th>First → Last</th><th>Service</th><th class="num">Traces</th>
+      <th class="num">Spans</th><th class="num">LLM</th><th class="num">Tokens</th><th class="num">Cost</th></tr></thead>
+    <tbody id="sess-body"></tbody></table></div>`;
+  const { sessions } = await (await fetch('/api/sessions?limit=200')).json();
+  $('#sess-body').innerHTML = sessions.map(s => `<tr data-session="${esc(s.session_id)}">
+    <td class="mono">${esc(s.session_id)}</td><td style="white-space:nowrap">${new Date(s.first_ms).toLocaleString()} → ${new Date(s.last_ms).toLocaleTimeString()}</td>
+    <td><span class="badge">${esc(s.service)}</span></td><td class="num">${s.trace_count}</td><td class="num">${s.span_count}</td>
+    <td class="num">${s.llm_calls}</td><td class="num">${fmtTok(s.total_tokens)}</td><td class="num">${s.cost_usd?'$'+s.cost_usd.toFixed(4):'—'}</td></tr>`).join('')
+    || `<tr><td colspan="8" class="empty">No sessions yet.<br><span style="font-size:12px">Sessions group traces by conversation (session.id / gen_ai.conversation.id / NeMo Relay sessionId, or an x-session-id proxy header).</span></td></tr>`;
+}
+
+async function renderUsers() {
+  $('#content').innerHTML = `<div class="table-wrap"><table class="grid">
+    <thead><tr><th>User</th><th>First → Last</th><th>Service</th><th class="num">Sessions</th>
+      <th class="num">Traces</th><th class="num">LLM</th><th class="num">Tokens</th><th class="num">Cost</th></tr></thead>
+    <tbody id="user-body"></tbody></table></div>`;
+  const { users } = await (await fetch('/api/users?limit=200')).json();
+  $('#user-body').innerHTML = users.map(u => `<tr data-user="${esc(u.user_id)}">
+    <td class="mono">${esc(u.user_id)}</td><td style="white-space:nowrap">${new Date(u.first_ms).toLocaleString()} → ${new Date(u.last_ms).toLocaleTimeString()}</td>
+    <td><span class="badge">${esc(u.service)}</span></td><td class="num">${u.session_count}</td><td class="num">${u.trace_count}</td>
+    <td class="num">${u.llm_calls}</td><td class="num">${fmtTok(u.total_tokens)}</td><td class="num">${u.cost_usd?'$'+u.cost_usd.toFixed(4):'—'}</td></tr>`).join('')
+    || `<tr><td colspan="8" class="empty">No users identified yet.<br><span style="font-size:12px">User id comes from user.id / gen_ai.user.id attributes, or OpenClaw's Feishu open-id in messages.</span></td></tr>`;
+}
+
+async function renderModels() {
+  const { models, services } = await (await fetch('/api/stats?x=1' + q())).json();
+  const maxTok = Math.max(...models.map(m => (m.prompt_tokens??0)+(m.completion_tokens??0)), 1);
+  $('#content').innerHTML = `<div class="page-scroll">
+    <div class="chart-box"><h3>Models</h3><div class="table-wrap"><table class="grid">
+      <thead><tr><th>Model</th><th class="num">Calls</th><th class="num">Input</th><th class="num">Output</th>
+        <th class="num">Avg latency</th><th class="num">Cost</th><th style="width:30%">Token share</th></tr></thead><tbody>
+      ${models.map(m => { const tk=(m.prompt_tokens??0)+(m.completion_tokens??0); return `<tr>
+        <td>${esc(m.model)}</td><td class="num">${m.calls}</td><td class="num">${fmtTok(m.prompt_tokens)}</td>
+        <td class="num">${fmtTok(m.completion_tokens)}</td><td class="num">${fmtDur(m.avg_ms)}</td>
+        <td class="num">${m.cost_usd?'$'+m.cost_usd.toFixed(4):'—'}</td>
+        <td><div class="hbar-track"><div class="hbar-fill" style="width:${tk/maxTok*100}%"></div></div></td></tr>`;}).join('')
+      || `<tr><td colspan="7" class="empty">No model calls in range.</td></tr>`}</tbody></table></div></div>
+    <div class="chart-box"><h3>Services</h3>${services.map(s => `<div class="hbar-row"><span>${esc(s.service)}</span>
+      <div class="hbar-track"><div class="hbar-fill" style="width:${s.spans/Math.max(...services.map(x=>x.spans),1)*100}%;background:var(--accent)"></div></div>
+      <span class="hbar-val">${s.traces} traces · ${s.spans} spans</span></div>`).join('')}</div></div>`;
+}
+
+async function renderDashboard() {
+  const [{ totals, models, services }, { traces }] = await Promise.all([
+    (await fetch('/api/stats?x=1' + q())).json(),
+    (await fetch('/api/traces?limit=500' + q())).json(),
   ]);
-  const now = Date.now();
-  const buckets = Array.from({ length: 24 }, () => ({ traces: 0, tokens: 0 }));
-  for (const t of traces) {
-    const age = Math.floor((now - t.start_ms) / 3600000);
-    if (age >= 0 && age < 24) { buckets[23 - age].traces++; buckets[23 - age].tokens += t.total_tokens ?? 0; }
-  }
-  const maxTr = Math.max(...buckets.map((b) => b.traces), 1);
-  const barW = 100 / 24;
-  const bars = buckets.map((b, i) =>
-    `<rect x="${i * barW + 0.4}%" y="${100 - b.traces / maxTr * 92}%" width="${barW - 0.8}%"
-       height="${b.traces / maxTr * 92}%" rx="2" fill="var(--accent)">
-       <title>${b.traces} traces · ${fmtTok(b.tokens)} tok</title></rect>`).join('');
-  const maxModelTok = Math.max(...models.map((m) => (m.prompt_tokens ?? 0) + (m.completion_tokens ?? 0)), 1);
-  const modelRows = models.map((m) => {
-    const tk = (m.prompt_tokens ?? 0) + (m.completion_tokens ?? 0);
-    return `<div class="hbar-row"><span title="${esc(m.model)}">${esc(m.model)}</span>
-      <div class="hbar-track"><div class="hbar-fill" style="width:${tk / maxModelTok * 100}%"></div></div>
-      <span class="hbar-val">${m.calls} calls · ${fmtTok(tk)}</span></div>`;
-  }).join('') || '<div style="color:var(--muted);font-size:13px">No LLM calls recorded yet.</div>';
-  const svcRows = services.map((s) => `<div class="hbar-row"><span>${esc(s.service)}</span>
-      <div class="hbar-track"><div class="hbar-fill" style="width:${s.spans / Math.max(...services.map(x => x.spans), 1) * 100}%;background:var(--accent)"></div></div>
-      <span class="hbar-val">${s.traces} traces · ${s.spans} spans</span></div>`).join('');
-  $('#dash-page').innerHTML = `
+  const now = Date.now(), buckets = Array.from({length:24}, () => ({t:0, tok:0}));
+  for (const t of traces) { const age = Math.floor((now - t.start_ms)/3600000);
+    if (age>=0 && age<24) { buckets[23-age].t++; buckets[23-age].tok += t.total_tokens??0; } }
+  const maxT = Math.max(...buckets.map(b=>b.t), 1), bw = 100/24;
+  const bars = buckets.map((b,i) => `<rect x="${i*bw+0.4}%" y="${100-b.t/maxT*92}%" width="${bw-0.8}%" height="${b.t/maxT*92}%" rx="2" fill="var(--accent)"><title>${b.t} traces · ${fmtTok(b.tok)} tok</title></rect>`).join('');
+  const maxMTok = Math.max(...models.map(m=>(m.prompt_tokens??0)+(m.completion_tokens??0)), 1);
+  $('#content').innerHTML = `<div class="page-scroll">
     <div class="cards">
-      <div class="card"><div class="num">${totals.traces ?? 0}</div><div class="lbl">Traces</div></div>
-      <div class="card"><div class="num">${totals.spans ?? 0}</div><div class="lbl">Spans</div></div>
-      <div class="card"><div class="num">${totals.llm_calls ?? 0}</div><div class="lbl">LLM calls</div></div>
-      <div class="card"><div class="num">${fmtTok(totals.prompt_tokens)}</div><div class="lbl">Input tokens</div></div>
-      <div class="card"><div class="num">${fmtTok(totals.completion_tokens)}</div><div class="lbl">Output tokens</div></div>
-      <div class="card"><div class="num">$${(totals.cost_usd ?? 0).toFixed(4)}</div><div class="lbl">Cost (reported)</div></div>
-    </div>
-    <div class="chart-box"><h3>Traces — last 24 hours</h3>
-      <svg width="100%" height="120">${bars}</svg></div>
-    <div class="chart-box"><h3>Token usage by model</h3>${modelRows}</div>
-    <div class="chart-box"><h3>Services</h3>${svcRows}</div>`;
+      <div class="card"><div class="cnum">${totals.traces??0}</div><div class="clbl">Traces</div></div>
+      <div class="card"><div class="cnum">${totals.spans??0}</div><div class="clbl">Spans</div></div>
+      <div class="card"><div class="cnum">${totals.llm_calls??0}</div><div class="clbl">LLM calls</div></div>
+      <div class="card"><div class="cnum">${fmtTok(totals.prompt_tokens)}</div><div class="clbl">Input tokens</div></div>
+      <div class="card"><div class="cnum">${fmtTok(totals.completion_tokens)}</div><div class="clbl">Output tokens</div></div>
+      <div class="card"><div class="cnum">$${(totals.cost_usd??0).toFixed(4)}</div><div class="clbl">Cost</div></div></div>
+    <div class="chart-box"><h3>Traces — last 24 hours</h3><svg width="100%" height="120">${bars}</svg></div>
+    <div class="chart-box"><h3>Token usage by model</h3>${models.map(m => { const tk=(m.prompt_tokens??0)+(m.completion_tokens??0);
+      return `<div class="hbar-row"><span title="${esc(m.model)}">${esc(m.model)}</span>
+        <div class="hbar-track"><div class="hbar-fill" style="width:${tk/maxMTok*100}%"></div></div>
+        <span class="hbar-val">${m.calls} calls · ${fmtTok(tk)}</span></div>`; }).join('') || '<div style="color:var(--muted);font-size:13px">No LLM calls in range.</div>'}</div>
+    <div class="chart-box"><h3>Services</h3>${services.map(s => `<div class="hbar-row"><span>${esc(s.service)}</span>
+      <div class="hbar-track"><div class="hbar-fill" style="width:${s.spans/Math.max(...services.map(x=>x.spans),1)*100}%;background:var(--accent)"></div></div>
+      <span class="hbar-val">${s.traces} traces · ${s.spans} spans</span></div>`).join('')}</div></div>`;
 }
 
-/* ---------- events ---------- */
-$('#trace-list').addEventListener('click', (e) => {
-  if (e.target.id === 'clear-session') {
-    e.preventDefault();
-    sessionFilter = null;
-    loadTraces();
-    return;
-  }
-  const row = e.target.closest('.trace-row');
-  if (row?.dataset.id) openTrace(row.dataset.id);
-});
-$('#detail-pane').addEventListener('click', (e) => {
-  const viewBtn = e.target.closest('.view-tabs button');
-  if (viewBtn) { viewMode = viewBtn.dataset.view; localStorage.setItem('lr-view', viewMode);
-    renderTraceView(); return; }
-  const dtab = e.target.closest('[data-dtab]');
-  if (dtab) { detailTab = dtab.dataset.dtab; renderSpanDetail(); return; }
-  const spanEl = e.target.closest('[data-span]');
-  if (spanEl) { selectedSpanId = spanEl.dataset.span; renderTraceView(); renderSpanDetail(); }
-});
-let searchTimer;
-$('#search').addEventListener('input', () => {
-  clearTimeout(searchTimer); searchTimer = setTimeout(loadTraces, 250);
-});
-let page = 'traces';
-function switchPage(next) {
+/* ============ navigation ============ */
+const PAGES = {
+  dashboard: { title: 'Dashboard', render: renderDashboard },
+  traces: { title: 'Tracing', render: renderTraces, subtabs: true },
+  sessions: { title: 'Sessions', render: renderSessions },
+  users: { title: 'Users', render: renderUsers },
+  models: { title: 'Models', render: renderModels },
+};
+async function navigate(next) {
   page = next;
-  $('#traces-page').style.display = page === 'traces' ? 'grid' : 'none';
-  $('#sessions-page').style.display = page === 'sessions' ? 'block' : 'none';
-  $('#dash-page').style.display = page === 'dash' ? 'block' : 'none';
-  $('#tab-traces').classList.toggle('active', page === 'traces');
-  $('#tab-sessions').classList.toggle('active', page === 'sessions');
-  $('#tab-dash').classList.toggle('active', page === 'dash');
-  if (page === 'dash') loadDashboard();
-  if (page === 'sessions') loadSessions();
+  document.querySelectorAll('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.page===next));
+  $('#page-title').textContent = PAGES[next].title;
+  $('#subtabs').innerHTML = PAGES[next].subtabs
+    ? `<button data-sub="list" class="${sub==='list'?'active':''}">Traces</button><button data-sub="observations" class="${sub==='observations'?'active':''}">Observations</button>` : '';
+  if (next === 'traces') { activeTraceId = null; }
+  await PAGES[next].render();
 }
-$('#tab-traces').addEventListener('click', () => switchPage('traces'));
-$('#tab-sessions').addEventListener('click', () => switchPage('sessions'));
-$('#tab-dash').addEventListener('click', () => switchPage('dash'));
 
-loadStats(); loadTraces();
+/* ============ events ============ */
+document.querySelectorAll('.nav-item').forEach(b => b.addEventListener('click', () => navigate(b.dataset.page)));
+$('#subtabs').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-sub]'); if (!b) return;
+  sub = b.dataset.sub;
+  document.querySelectorAll('#subtabs button').forEach(x => x.classList.toggle('active', x.dataset.sub===sub));
+  if (sub === 'list') renderTraces(); else renderObservations();
+});
+$('#range').value = String(range);
+$('#range').addEventListener('change', (e) => {
+  range = Number(e.target.value); localStorage.setItem('ot-range', range);
+  loadStats(); PAGES[page].render();
+});
+$('#content').addEventListener('click', (e) => {
+  if (e.target.id === 'clear-filter') { e.preventDefault(); sessionFilter=null; userFilter=null; loadTraceList(); return; }
+  const vb = e.target.closest('.view-tabs button');
+  if (vb) { viewMode = vb.dataset.view; localStorage.setItem('ot-view', viewMode); renderTraceView(); return; }
+  const dt = e.target.closest('[data-dtab]');
+  if (dt) { detailTab = dt.dataset.dtab; renderSpanDetail(); return; }
+  const sp = e.target.closest('[data-span]');
+  if (sp) { selectedSpanId = sp.dataset.span; renderTraceView(); renderSpanDetail(); return; }
+  const tr = e.target.closest('.trace-row');
+  if (tr?.dataset.id) { openTrace(tr.dataset.id); return; }
+  const obs = e.target.closest('[data-trace]');
+  if (obs) { navigate('traces').then(() => openTrace(obs.dataset.trace)); return; }
+  const ss = e.target.closest('[data-session]');
+  if (ss) { sessionFilter = ss.dataset.session; userFilter = null; navigate('traces').then(loadTraceList); return; }
+  const us = e.target.closest('[data-user]');
+  if (us) { userFilter = us.dataset.user; sessionFilter = null; navigate('traces').then(loadTraceList); return; }
+});
+
+/* ============ boot + auto-refresh ============ */
+loadStats(); navigate('traces');
 setInterval(() => {
   loadStats();
-  if (page === 'traces') { loadTraces(); if (activeTraceId) openTrace(activeTraceId, true); }
-  else if (page === 'sessions') loadSessions();
-  else loadDashboard();
+  if (page === 'traces') { if (sub==='list') { loadTraceList(); if (activeTraceId) openTrace(activeTraceId, true); } else loadObservations(); }
+  else PAGES[page].render();
 }, 5000);
 </script>
 </body>

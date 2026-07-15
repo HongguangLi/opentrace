@@ -1,4 +1,4 @@
-# pi → langfuse-relay
+# pi → OpenTrace
 
 [pi](https://github.com/badlogic/pi-mono) is a minimal, hackable coding agent.
 

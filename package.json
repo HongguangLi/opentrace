@@ -1,11 +1,11 @@
 {
-  "name": "langfuse-relay",
+  "name": "opentrace",
   "version": "0.1.0",
-  "description": "Local-first LLM agent observability: a single-process OTLP trace collector + dashboard for Claude Code, Codex, OpenClaw, opencode, Hermes, pi and other coding agents. Inspired by Langfuse (visualization) and NVIDIA NeMo Relay (protocol-agnostic capture).",
+  "description": "OpenTrace — agent-native, local-first LLM observability: a single-process capture (OTLP ingest + LLM tracing proxy), SQLite store, and dashboard for Claude Code, Codex, OpenClaw, opencode, Hermes, pi and other coding agents. Langfuse-style UX, NeMo Relay-style capture, zero containers.",
   "license": "Apache-2.0",
   "type": "module",
   "bin": {
-    "langfuse-relay": "src/cli.js"
+    "opentrace": "src/cli.js"
   },
   "main": "src/server.js",
   "engines": {

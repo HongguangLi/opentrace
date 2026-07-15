@@ -1,4 +1,4 @@
-# Claude Code → langfuse-relay
+# Claude Code → OpenTrace
 
 Both capture interfaces work; pick one.
 

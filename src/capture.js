@@ -14,8 +14,8 @@ const MAX_RECORDED_RESPONSE = 8 * 1024 * 1024;
 const SKIP_HEADERS = new Set([
   'host', 'connection', 'content-length', 'transfer-encoding',
   'keep-alive', 'upgrade', 'proxy-authorization', 'te', 'trailer',
-  // Relay-internal headers must never leak to the upstream.
-  'x-langfuse-relay-token', 'x-session-id', 'x-service-name',
+  // OpenTrace-internal headers must never leak to the upstream.
+  'x-opentrace-token', 'x-langfuse-relay-token', 'x-session-id', 'x-service-name',
 ]);
 
 function forwardHeaders(req) {
@@ -185,7 +185,7 @@ export async function handleProxyRequest(req, res, body, { provider, upstream, s
       name: `${provider} ${model}`,
       kind: 'CLIENT',
       service,
-      scope: 'langfuse-relay/proxy',
+      scope: 'opentrace/proxy',
       startNs: BigInt(startMs) * 1_000_000n,
       endNs: BigInt(endMs) * 1_000_000n,
       durationMs: endMs - startMs,

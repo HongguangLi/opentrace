@@ -1,6 +1,6 @@
-# OpenClaw → langfuse-relay (via NeMo Relay)
+# OpenClaw → OpenTrace (via NeMo Relay)
 
-OpenClaw's [NeMo Relay plugin](https://github.com/NVIDIA/NeMo-Relay) captures LLM and tool activity through OpenClaw's hook system and exports OTLP. This is the most complete integration — it was the original motivation for langfuse-relay.
+OpenClaw's [NeMo Relay plugin](https://github.com/NVIDIA/NeMo-Relay) captures LLM and tool activity through OpenClaw's hook system and exports OTLP. This is the most complete integration — it was the original motivation for OpenTrace.
 
 ## Configuration
 
@@ -47,11 +47,11 @@ Restart the gateway afterwards (`systemctl --user restart openclaw` or `openclaw
 
 ## Exporter choice
 
-NeMo Relay offers two OTLP exporters — langfuse-relay understands both:
+NeMo Relay offers two OTLP exporters — OpenTrace understands both:
 
 - **`openinference`** (recommended): standard `llm.*` attributes; input/output render directly.
-- **`opentelemetry`**: NVIDIA's native `nemo_relay.*` attributes; langfuse-relay digs the messages and token usage out of the `*_json` payloads automatically.
+- **`opentelemetry`**: NVIDIA's native `nemo_relay.*` attributes; OpenTrace digs the messages and token usage out of the `*_json` payloads automatically.
 
 ## Migrating from a self-hosted Langfuse
 
-If you previously exported to Langfuse's OTLP endpoint (`/api/public/otel/v1/traces`), just change the host — langfuse-relay serves the same path and accepts (ignores) the Basic auth header.
+If you previously exported to Langfuse's OTLP endpoint (`/api/public/otel/v1/traces`), just change the host — OpenTrace serves the same path and accepts (ignores) the Basic auth header.

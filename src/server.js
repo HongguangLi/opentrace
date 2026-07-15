@@ -1,5 +1,6 @@
-// Single-process HTTP server: OTLP ingestion + query API + dashboard.
-// No framework — node:http is plenty for a local-first tool.
+// OpenTrace — single-process HTTP server: OTLP ingestion + LLM proxy
+// capture + query API + dashboard. No framework — node:http is plenty for
+// a local-first tool.
 import http from 'node:http';
 import zlib from 'node:zlib';
 import { readFileSync } from 'node:fs';
@@ -65,8 +66,9 @@ export function createServer({
         // (it carries the agent's API key), so relay auth uses its own
         // header here — without this check a non-loopback bind would be an
         // open relay to the configured upstreams.
-        if (token && req.headers['x-langfuse-relay-token'] !== token) {
-          sendJson(res, 401, { error: 'unauthorized: set x-langfuse-relay-token header' });
+        const proxyToken = req.headers['x-opentrace-token'] ?? req.headers['x-langfuse-relay-token'];
+        if (token && proxyToken !== token) {
+          sendJson(res, 401, { error: 'unauthorized: set x-opentrace-token header' });
           return;
         }
         const body = await readBody(req, maxBodyBytes);
@@ -103,9 +105,10 @@ export function createServer({
         try {
           spans = await decodeTraceExport(body, contentType);
         } catch (error) {
-          if (process.env.LANGFUSE_RELAY_DEBUG_DIR) {
+          const debugDir = process.env.OPENTRACE_DEBUG_DIR ?? process.env.LANGFUSE_RELAY_DEBUG_DIR;
+          if (debugDir) {
             const { writeFileSync } = await import('node:fs');
-            const dump = path.join(process.env.LANGFUSE_RELAY_DEBUG_DIR, `failed-${Date.now()}.bin`);
+            const dump = path.join(debugDir, `failed-${Date.now()}.bin`);
             writeFileSync(dump, body);
             writeFileSync(dump + '.headers.json', JSON.stringify(req.headers, null, 2));
             logger.error(`[debug] decode failed, payload dumped to ${dump}`);

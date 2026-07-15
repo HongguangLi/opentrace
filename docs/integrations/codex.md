@@ -1,4 +1,4 @@
-# Codex → langfuse-relay
+# Codex → OpenTrace
 
 ## Native OTel export
 

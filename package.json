@@ -1,6 +1,6 @@
 {
   "name": "agenttap",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "AgentTap — agent-native, local-first LLM observability in one process: capture (OTLP ingest + built-in LLM tracing proxy), SQLite store, and a Langfuse-style dashboard for Claude Code, Codex, OpenClaw, opencode, Hermes, pi. Tap into any agent's LLM traffic — zero containers.",
   "license": "Apache-2.0",
   "author": "Hongguang Li",

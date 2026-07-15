@@ -1,6 +1,14 @@
 # AgentTap
 
+[![npm](https://img.shields.io/npm/v/agenttap?color=CC3534&logo=npm)](https://www.npmjs.com/package/agenttap)
+[![node](https://img.shields.io/node/v/agenttap)](https://nodejs.org)
+[![license](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+
 **Tap into your coding agents' LLM traffic — agent-native, local-first observability in a single process.**
+
+```bash
+npx agenttap    # then open http://127.0.0.1:4318
+```
 
 A tiny capture-and-visualize platform purpose-built for coding-agent power users — [Claude Code](https://claude.com/claude-code), [Codex](https://github.com/openai/codex), [OpenClaw](https://openclaw.ai), [opencode](https://github.com/sst/opencode), Hermes, [pi](https://github.com/badlogic/pi-mono) — who want to see every LLM call, token count, and tool execution their agents make, without running a fleet of containers. Agent-native means it speaks the OTLP dialects agents actually emit (GenAI, OpenInference, NeMo Relay) out of the box; local-first means everything — capture, storage, dashboard — runs on your machine and your prompts never leave it.
 
@@ -78,7 +86,7 @@ Langfuse is excellent — and if you need team features, evaluations, prompt man
 | Processes | 6 containers | 1 Node process |
 | Storage | Postgres + ClickHouse + Redis + MinIO | 1 SQLite file |
 | Dependencies | Docker Compose | `protobufjs` (only) |
-| Setup | env file with 10+ secrets | clone → `npm install` → `npm start` |
+| Setup | env file with 10+ secrets | `npx agenttap` |
 | RAM footprint | ~2 GB+ | ~50 MB |
 | Built-in capture | SDKs + OTLP | SDKs + OTLP **plus** a built-in LLM tracing proxy |
 | Semantic conventions | GenAI, OpenInference, Langfuse SDK | GenAI, OpenInference, NeMo Relay |
@@ -91,19 +99,29 @@ Langfuse is excellent — and if you need team features, evaluations, prompt man
 
 Requires **Node.js ≥ 22.13** (uses the built-in `node:sqlite` — no database server needed).
 
+**Run it instantly with npx — no clone, no install:**
+
 ```bash
-# 1. Get the code
+npx agenttap
+```
+
+**Or install globally** for a persistent `agenttap` command:
+
+```bash
+npm install -g agenttap
+agenttap
+```
+
+**Or from source** (to hack on it):
+
+```bash
 git clone https://github.com/HongguangLi/agenttap
 cd agenttap
-
-# 2. Install the single dependency
 npm install
-
-# 3. Run
 npm start
 ```
 
-You should see:
+Any of these prints:
 
 ```
 AgentTap listening on http://127.0.0.1:4318

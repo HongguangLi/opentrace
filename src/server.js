@@ -6,8 +6,9 @@ import zlib from 'node:zlib';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-import { decodeTraceExport } from './otlp.js';
+import { decodeTraceExport, decodeLogsExport } from './otlp.js';
 import { extractSemantics } from './semantics.js';
+import { logEventToSpan } from './logs.js';
 import { SpanStore } from './store.js';
 import { handleProxyRequest } from './capture.js';
 
@@ -16,6 +17,10 @@ const UI_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), 'ui', 'i
 // OTLP standard path plus a Langfuse-compatible alias, so existing exporters
 // pointed at Langfuse's OTLP endpoint only need a host/port change.
 const INGEST_PATHS = new Set(['/v1/traces', '/api/public/otel/v1/traces']);
+// Some agents (Claude Code) emit telemetry as OTLP logs, not spans.
+const LOGS_PATHS = new Set(['/v1/logs', '/api/public/otel/v1/logs']);
+// Metrics we accept-and-ignore so those exporters don't log delivery errors.
+const METRICS_PATHS = new Set(['/v1/metrics', '/api/public/otel/v1/metrics']);
 
 function readBody(req, maxBytes) {
   return new Promise((resolve, reject) => {
@@ -33,6 +38,17 @@ function readBody(req, maxBytes) {
     req.on('end', () => resolve(Buffer.concat(chunks)));
     req.on('error', reject);
   });
+}
+
+// Read a request body and transparently decompress gzip/deflate, which OTLP
+// exporters commonly apply (undecompressed, gzip bytes fed to the protobuf
+// decoder surface as a misleading "index out of range").
+async function readOtlpBody(req, maxBodyBytes) {
+  let body = await readBody(req, maxBodyBytes);
+  const encoding = req.headers['content-encoding'] ?? '';
+  if (encoding.includes('gzip')) body = zlib.gunzipSync(body);
+  else if (encoding.includes('deflate')) body = zlib.inflateSync(body);
+  return body;
 }
 
 function sendJson(res, statusCode, body) {
@@ -91,15 +107,7 @@ export function createServer({
             return;
           }
         }
-        let body = await readBody(req, maxBodyBytes);
-        // OTLP exporters commonly compress payloads; decode errors from
-        // treating gzip bytes as protobuf look like "index out of range".
-        const encoding = req.headers['content-encoding'] ?? '';
-        if (encoding.includes('gzip')) {
-          body = zlib.gunzipSync(body);
-        } else if (encoding.includes('deflate')) {
-          body = zlib.inflateSync(body);
-        }
+        const body = await readOtlpBody(req, maxBodyBytes);
         const contentType = req.headers['content-type'] ?? 'application/x-protobuf';
         let spans;
         try {
@@ -121,6 +129,36 @@ export function createServer({
         const count = store.insertSpans(spans);
         logger.log(`[ingest] ${count} span(s) from ${spans[0]?.service ?? 'unknown'}`);
         // OTLP/HTTP success response: empty partial-success object.
+        sendJson(res, 200, {});
+        return;
+      }
+
+      // OTLP logs: agents like Claude Code report per-request telemetry as
+      // log events; synthesize spans from the ones that carry model/token data.
+      if (req.method === 'POST' && LOGS_PATHS.has(url.pathname)) {
+        if (token) {
+          const auth = req.headers.authorization ?? '';
+          if (auth !== `Bearer ${token}` && auth !== `Basic ${token}`) {
+            sendJson(res, 401, { error: 'unauthorized' });
+            return;
+          }
+        }
+        const body = await readOtlpBody(req, maxBodyBytes);
+        const contentType = req.headers['content-type'] ?? 'application/x-protobuf';
+        const events = await decodeLogsExport(body, contentType);
+        const spans = events.map(logEventToSpan).filter(Boolean);
+        if (spans.length > 0) {
+          store.insertSpans(spans);
+          logger.log(`[ingest] ${spans.length} span(s) from ${spans[0].service} logs`);
+        }
+        sendJson(res, 200, {});
+        return;
+      }
+
+      // OTLP metrics: accepted and ignored so metric-emitting agents don't
+      // log delivery failures (AgentTap visualizes traces, not metrics).
+      if (req.method === 'POST' && METRICS_PATHS.has(url.pathname)) {
+        req.resume();
         sendJson(res, 200, {});
         return;
       }

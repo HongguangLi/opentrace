@@ -223,6 +223,9 @@ export function extractUserId(attrs, inputText) {
     attrs['gen_ai.user.id'],
     attrs['langfuse.user.id'],
     attrs['enduser.id'],
+    // Claude Code identifies the user by email / account uuid.
+    attrs['user.email'],
+    attrs['user.account_uuid'],
   );
   if (direct) return String(direct);
   for (const [key, value] of Object.entries(attrs)) {

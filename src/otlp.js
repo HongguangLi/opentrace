@@ -1,6 +1,6 @@
 // OTLP/HTTP payload decoding: accepts both binary protobuf and JSON
-// encodings of ExportTraceServiceRequest and normalizes them into flat
-// span records ready for storage.
+// encodings of the trace and logs export requests and normalizes them into
+// flat records ready for storage.
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import protobuf from 'protobufjs';
@@ -12,14 +12,11 @@ const PROTO_PATH = path.join(
   'otlp.proto',
 );
 
-let requestType = null;
+const types = { root: null };
 
-async function loadProto() {
-  if (!requestType) {
-    const root = await protobuf.load(PROTO_PATH);
-    requestType = root.lookupType('otlp.ExportTraceServiceRequest');
-  }
-  return requestType;
+async function lookup(name) {
+  if (!types.root) types.root = await protobuf.load(PROTO_PATH);
+  return types.root.lookupType(name);
 }
 
 function bytesToHex(value) {
@@ -123,12 +120,48 @@ function normalize(request) {
   return spans;
 }
 
-/** Decode an OTLP/HTTP request body based on its content type. */
+/** Decode an OTLP/HTTP trace export body based on its content type. */
 export async function decodeTraceExport(body, contentType) {
   if (contentType.includes('application/json')) {
     return normalize(JSON.parse(body.toString('utf8')));
   }
-  const type = await loadProto();
+  const type = await lookup('otlp.ExportTraceServiceRequest');
   const message = type.decode(body);
   return normalize(type.toObject(message, { longs: String, bytes: Buffer, defaults: false }));
+}
+
+/** Flatten a decoded ExportLogsServiceRequest into normalized log events. */
+function normalizeLogs(request) {
+  const events = [];
+  for (const rl of request.resourceLogs ?? []) {
+    const resource = keyValuesToObject(rl.resource?.attributes);
+    const service = resource['service.name'] ?? 'unknown';
+    for (const sl of rl.scopeLogs ?? []) {
+      const scopeName = sl.scope?.name ?? '';
+      for (const rec of sl.logRecords ?? []) {
+        events.push({
+          timeNs: toBigIntNano(rec.timeUnixNano ?? rec.observedTimeUnixNano),
+          name: rec.eventName || anyValueToJs(rec.body) || '',
+          severity: rec.severityText ?? '',
+          service,
+          scope: scopeName,
+          traceId: bytesToHex(rec.traceId),
+          spanId: bytesToHex(rec.spanId),
+          attributes: keyValuesToObject(rec.attributes),
+          resource,
+        });
+      }
+    }
+  }
+  return events;
+}
+
+/** Decode an OTLP/HTTP logs export body based on its content type. */
+export async function decodeLogsExport(body, contentType) {
+  if (contentType.includes('application/json')) {
+    return normalizeLogs(JSON.parse(body.toString('utf8')));
+  }
+  const type = await lookup('otlp.ExportLogsServiceRequest');
+  const message = type.decode(body);
+  return normalizeLogs(type.toObject(message, { longs: String, bytes: Buffer, defaults: false }));
 }
